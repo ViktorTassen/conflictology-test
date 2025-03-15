@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coup Card Game</title>
+    <link rel="stylesheet" href="src/styles/style.css">
+</head>
+<body>
+    <div id="game-container">
+        <div id="header">
+            <h1>Coup</h1>
+            <div id="game-state"></div>
+        </div>
+        
+        <div id="court-deck">
+            <h2>Court Deck</h2>
+            <div id="deck-count"></div>
+        </div>
+        
+        <div id="treasury">
+            <h2>Treasury</h2>
+            <div id="treasury-count"></div>
+        </div>
+        
+        <div id="current-player-info">
+            <h2>Current Player: <span id="current-player-name"></span></h2>
+        </div>
+
+        <div id="actions-panel">
+            <h2>Actions</h2>
+            <div id="basic-actions">
+                <button id="income-btn">Income (1 coin)</button>
+                <button id="foreign-aid-btn">Foreign Aid (2 coins)</button>
+                <button id="coup-btn">Coup (7 coins)</button>
+            </div>
+            <div id="character-actions">
+                <button id="tax-btn">Tax - Duke (3 coins)</button>
+                <button id="assassinate-btn">Assassinate - Assassin (3 coins)</button>
+                <button id="steal-btn">Steal - Captain (2 coins)</button>
+                <button id="exchange-btn">Exchange - Ambassador</button>
+            </div>
+        </div>
+
+        <div id="target-selection" class="hidden">
+            <h3>Select a target:</h3>
+            <div id="target-buttons"></div>
+            <button id="cancel-target">Cancel</button>
+        </div>
+
+        <div id="exchange-panel" class="hidden">
+            <h3>Exchange Cards</h3>
+            <div id="exchange-cards"></div>
+            <button id="confirm-exchange">Confirm Exchange</button>
+            <button id="cancel-exchange">Cancel</button>
+        </div>
+
+        <div id="challenge-panel" class="hidden">
+            <h3>Action can be challenged</h3>
+            <div id="challenge-text"></div>
+            <div id="challenge-buttons"></div>
+            <button id="no-challenge">No Challenge</button>
+        </div>
+
+        <div id="block-panel" class="hidden">
+            <h3>Action can be blocked</h3>
+            <div id="block-text"></div>
+            <div id="block-buttons"></div>
+            <button id="no-block">No Block</button>
+        </div>
+
+        <div id="players-container"></div>
+
+        <div id="game-setup" class="active">
+            <h2>Game Setup</h2>
+            <div id="player-setup">
+                <label for="num-players">Number of Players (2-6):</label>
+                <input type="number" id="num-players" min="2" max="6" value="4">
+                <div id="player-names-container"></div>
+                <button id="start-game-btn" onclick="window.gameUI && window.gameUI.startGame()">Start Game</button>
+            </div>
+        </div>
+
+        <div id="game-log">
+            <h3>Game Log</h3>
+            <div id="log-entries"></div>
+        </div>
+    </div>
+
+    <script src="src/app.js" type="module"></script>
+</body>
+</html>
