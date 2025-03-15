@@ -1,0 +1,535 @@
+/* Styling for side panel */
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Arial', sans-serif;
+  overflow-x: hidden;
+  background-color: #f8f9fa;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.content {
+  width: 100%;
+  margin: 0 auto;
+  padding: 1rem;
+  text-align: center;
+  max-width: 100%;
+}
+
+.button-container {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+button {
+  padding: 0.5rem 1rem;
+  background-color: #3498db;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+button:hover {
+  background-color: #2980b9;
+}
+
+button:disabled {
+  background-color: #95a5a6;
+  cursor: not-allowed;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+input {
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 1rem;
+}
+
+.error {
+  color: #e74c3c;
+  margin-top: 0.5rem;
+}
+
+.player-list {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0;
+  text-align: left;
+}
+
+.player-list li {
+  padding: 0.5rem;
+  border-bottom: 1px solid #eee;
+}
+
+.current-player {
+  font-weight: bold;
+  background-color: #f8f9fa;
+}
+
+.game-log {
+  max-height: 150px;
+  overflow-y: auto;
+  text-align: left;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 0.5rem;
+  margin-top: 1rem;
+}
+
+.log-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.log-entry {
+  font-size: 0.875rem;
+  color: #333;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 0.25rem;
+}
+
+.waiting-msg {
+  font-style: italic;
+  color: #7f8c8d;
+  margin-top: 1rem;
+}
+
+.game-info {
+  text-align: left;
+  margin-bottom: 1rem;
+  background-color: #f8f9fa;
+  padding: 0.5rem;
+  border-radius: 4px;
+}
+
+.players-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.player-box {
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 0.5rem;
+  text-align: left;
+}
+
+.your-player {
+  border-color: #3498db;
+  background-color: #ecf0f1;
+}
+
+.active-player {
+  border-width: 2px;
+  border-color: #2ecc71;
+}
+
+.player-name {
+  font-weight: bold;
+  margin-bottom: 0.25rem;
+}
+
+.player-cards {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.card {
+  width: 60px;
+  height: 80px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 0.75rem;
+  text-align: center;
+  background-color: white;
+}
+
+.player-eliminated {
+  font-weight: bold;
+  color: #e74c3c;
+  margin-top: 8px;
+  font-size: 1.1rem;
+  text-transform: uppercase;
+  background-color: rgba(231, 76, 60, 0.1);
+  padding: 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(231, 76, 60, 0.3);
+}
+
+.card.duke {
+  background-color: #3498db;
+  color: white;
+}
+
+.card.assassin {
+  background-color: #e74c3c;
+  color: white;
+}
+
+.card.captain {
+  background-color: #2ecc71;
+  color: white;
+}
+
+.card.ambassador {
+  background-color: #f39c12;
+  color: white;
+}
+
+.card.contessa {
+  background-color: #9b59b6;
+  color: white;
+}
+
+.game-actions {
+  margin: 1rem 0;
+}
+
+.action-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  justify-content: center;
+  align-items: center;
+  background-color: #f8f9fa;
+  padding: 1rem;
+  border-radius: 5px;
+  margin-top: 0.5rem;
+}
+
+.action-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-bottom: 0.5rem;
+}
+
+.waiting-msg {
+  text-align: center;
+  font-style: italic;
+  color: #7f8c8d;
+  padding: 1rem;
+  background-color: #f8f9fa;
+  border-radius: 5px;
+  margin-top: 0.5rem;
+}
+
+.pending-action {
+  background-color: #f8f9fa;
+  padding: 1rem;
+  border-radius: 5px;
+  margin-top: 0.5rem;
+  border: 1px solid #ddd;
+}
+
+.pending-action h3 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+  color: #e74c3c;
+}
+
+.pending-action-details {
+  text-align: left;
+}
+
+.target-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.target-item {
+  background-color: #f8f9fa;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.target-name {
+  font-weight: bold;
+  font-size: 1.1rem;
+}
+
+.target-info {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.back-button {
+  margin-top: 1rem;
+  background-color: #95a5a6;
+}
+
+/* Challenge and block UI */
+.pending-action, .pending-block {
+  background-color: #f8f9fa;
+  padding: 1rem;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+  margin-bottom: 1rem;
+}
+
+.pending-action h3, .pending-block h3 {
+  color: #e74c3c;
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+
+.pending-action-details, .pending-block-details {
+  font-size: 0.9rem;
+}
+
+.challenge-options, .block-options, .challenge-block-options, .action-required {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background-color: #fff;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+}
+
+.challenge-buttons, .block-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.required-action-btn {
+  background-color: #e74c3c;
+  margin-top: 0.5rem;
+}
+
+.required-action-btn:hover {
+  background-color: #c0392b;
+}
+
+/* Danger button */
+.danger-button {
+  background-color: #d9534f;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-top: 10px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.danger-button:hover {
+  background-color: #c9302c;
+}
+
+/* Game over styles */
+.game-over-panel {
+  background-color: #f5f5f5;
+  border-radius: 5px;
+  padding: 15px;
+  margin-bottom: 20px;
+  text-align: center;
+  border: 1px solid #ddd;
+}
+
+.game-over-title {
+  color: #e74c3c;
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 1.5rem;
+}
+
+.winner-announcement {
+  font-size: 1.2rem;
+  font-weight: bold;
+  margin-bottom: 15px;
+  color: #2c3e50;
+}
+
+.new-game-button {
+  background-color: #27ae60;
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 4px;
+  margin: 10px 0;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.new-game-button:hover {
+  background-color: #219651;
+}
+
+.vote-confirmation {
+  color: #27ae60;
+  font-style: italic;
+  margin: 10px 0;
+}
+
+.vote-count {
+  font-size: 0.9rem;
+  color: #7f8c8d;
+  margin-top: 10px;
+}
+
+.pending-action-title {
+  font-size: 1.1rem;
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
+.action-type {
+  font-weight: bold;
+  color: #e74c3c;
+}
+
+.actor-name {
+  font-weight: bold;
+  color: #3498db;
+}
+
+.character-name {
+  font-weight: bold;
+  color: #9b59b6;
+}
+
+.action-target {
+  margin: 8px 0;
+}
+
+.target-name {
+  font-weight: bold;
+  color: #e74c3c;
+}
+
+.waiting-for-player, .waiting-status {
+  font-style: italic;
+  color: #e67e22;
+  margin: 10px 0;
+  padding: 6px 10px;
+  border-radius: 4px;
+  background-color: rgba(230, 126, 34, 0.1);
+  border: 1px dashed rgba(230, 126, 34, 0.3);
+}
+
+/* Player response status styles */
+.player-responses {
+  margin: 15px 0;
+  padding: 10px;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+}
+
+.responses-title {
+  font-weight: bold;
+  margin-bottom: 8px;
+  color: #2c3e50;
+  font-size: 0.9rem;
+}
+
+.player-response-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 3px 0;
+  margin: 2px 0;
+  border-bottom: 1px dotted #eee;
+}
+
+.response-player-name {
+  font-weight: 500;
+  color: #3498db;
+}
+
+.response-status {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  text-align: center;
+  line-height: 24px;
+  border-radius: 50%;
+}
+
+.response-status.responded {
+  background-color: #2ecc71;
+  color: white;
+}
+
+.response-status.waiting {
+  background-color: #f1c40f;
+  color: #2c3e50;
+}
+
+/* Card selection UI */
+.card-selection {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: center;
+  margin: 1rem 0;
+}
+
+.card-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.card-choice.selected {
+  background-color: rgba(46, 204, 113, 0.2);
+}
+
+.card-select-indicator {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #ddd;
+  border-radius: 50%;
+  background-color: white;
+  font-weight: bold;
+  color: #2ecc71;
+}
+
+.exchange-instruction, .lose-influence-instruction {
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+  color: #555;
+}
