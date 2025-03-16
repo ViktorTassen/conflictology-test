@@ -57,6 +57,30 @@ function App() {
   const [selectedCards, setSelectedCards] = useState<number[]>([]);  // For card exchange
   const [processingAction, setProcessingAction] = useState(false);  // For action feedback
   
+  // Helper function to check if player should go to lose influence screen
+  // or be automatically eliminated
+  const handleLoseInfluence = () => {
+    if (!gameState || playerId === null) return;
+    
+    const player = gameState.players.find(p => p.id === playerId);
+    if (!player) return;
+    
+    const aliveCards = player.cards.filter(card => !card.eliminated);
+    
+    if (aliveCards.length === 1) {
+      // Player only has one card - automatic elimination
+      console.log("Player only has one card - waiting for auto-elimination");
+      // Don't change view - just wait for server update
+      setTimeout(() => {
+        setProcessingAction(false);
+      }, 2000);
+    } else {
+      // Player has multiple cards - go to selection screen
+      setView('lose-influence');
+      setProcessingAction(false);
+    }
+  };
+  
   // Always add this effect at the app level to ensure consistent hooks order
   useEffect(() => {
     // This effect only activates when the view is 'exchange-cards'
@@ -356,8 +380,6 @@ function App() {
             <>
               <p>Current Player: {gameState.players[gameState.currentPlayerIndex]?.name}</p>
               <p>Your Name: {gameState.players.find(p => p.id === playerId)?.name}</p>
-              <p>Treasury: {gameState.treasury} coins</p>
-              <p>Cards in Deck: {gameState.deck.length}</p>
             </>
           )}
           
@@ -555,11 +577,15 @@ function App() {
                  ((gameState.pendingAction.type === 'coup' && gameState.pendingAction.target?.id === playerId) ||
                   (gameState.pendingAction.type === 'assassinate' && 
                    gameState.pendingAction.target?.id === playerId && 
-                   gameState.actionResponders?.includes(playerId)))) && (
+                   gameState.actionResponders?.includes(playerId)))) && 
+                   !processingAction && (
                   <div className="action-required">
                     <p>You must lose influence!</p>
                     <button
-                      onClick={() => setView('lose-influence')}
+                      onClick={() => {
+                        setProcessingAction(true);
+                        handleLoseInfluence();
+                      }}
                       className="required-action-btn"
                     >
                       Choose Influence to Lose
@@ -664,7 +690,8 @@ function App() {
                 )}
                 {/* Exchange action - only show the exchange option if all players have responded */}
                 {gameState.pendingAction.type === 'exchange' && 
-                 gameState.pendingAction.player?.id === playerId && (
+                 gameState.pendingAction.player?.id === playerId &&
+                 !processingAction && (
                   <div className="action-required">
                     {/* Only check if cards are available for exchange - action responders should be maintained */}
                     {(gameState.pendingExchangeCards && gameState.pendingExchangeCards.length > 0) ? (
@@ -691,6 +718,8 @@ function App() {
                  playerId !== gameState.pendingAction.player?.id && 
                  // Haven't responded yet
                  !gameState.actionResponders?.includes(playerId!) && 
+                 // Not processing an action (immediately hide UI when responding)
+                 !processingAction &&
                  // Not eliminated
                  !gameState.players.find(p => p.id === playerId)?.eliminated &&
                  // Check that action can be challenged or blocked
@@ -1121,7 +1150,8 @@ function App() {
                 
                 {/* Only the non-eliminated player whose action is being blocked should see these options */}
                 {gameState.pendingAction?.player?.id === playerId && 
-                 !gameState.players.find(p => p.id === playerId)?.eliminated && (
+                 !gameState.players.find(p => p.id === playerId)?.eliminated &&
+                 !processingAction && (
                   <div className="challenge-block-options">
                     <div className="response-options" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                       {/* Challenge Option */}
@@ -1253,6 +1283,14 @@ function App() {
     
     // Only show non-eliminated cards
     const aliveCards = player.cards.filter(card => !card.eliminated);
+    
+    // If player only has one card left, they will be automatically eliminated by the server
+    // Redirect back to game view immediately
+    if (aliveCards.length === 1) {
+      console.log("Player only has one card left. Auto-elimination will occur.");
+      setView('game');
+      return <div>You will be automatically eliminated...</div>;
+    }
     
     // Check if this is a "lose second influence" case
     const isSecondInfluence = gameState.pendingAction?.reason === 'assassination';
@@ -1607,6 +1645,20 @@ function App() {
     case 'target-selection-steal':
       return renderTargetSelectionSteal();
     case 'lose-influence':
+      // If player only has one card left, don't render the lose influence view
+      // This will prevent showing the selection screen even if setView is called
+      const player = gameState?.players.find(p => p.id === playerId);
+      if (player) {
+        const aliveCards = player.cards.filter(card => !card.eliminated);
+        if (aliveCards.length === 1) {
+          console.log("Player only has one card - redirecting to game view");
+          // Redirect to game view
+          setTimeout(() => {
+            setView('game');
+          }, 0);
+          return <div>You will be automatically eliminated...</div>;
+        }
+      }
       return renderLoseInfluence();
     case 'exchange-cards':
       return renderExchangeCards();

@@ -878,11 +878,14 @@ export const performChallenge = async (gameId: string, challengerId: number) => 
       throw new Error('Challenged player not found');
     }
     
-    // Add this player to the action responders list since they have responded with a challenge
+    // Check if player has already responded to this action
     const actionResponders = gameData.actionResponders || [];
-    if (!actionResponders.includes(challengerId)) {
-      actionResponders.push(challengerId);
+    if (actionResponders.includes(challengerId)) {
+      throw new Error('You have already responded to this action');
     }
+    
+    // Add this player to the action responders list since they have responded with a challenge
+    actionResponders.push(challengerId);
     
     // Add log entry
     const logEntry = `${playerChallenger.name} challenges ${challenged.name}'s claim to have ${gameData.pendingAction.character}`;
@@ -1087,6 +1090,20 @@ export const performBlock = async (gameId: string, blockerId: number, blockingCh
       throw new Error('Blocked player not found');
     }
     
+    // Check that player is not trying to block their own action
+    if (blocked.id === blockerId) {
+      throw new Error('You cannot block your own action');
+    }
+    
+    // Check if player has already responded to this action
+    const actionResponders = gameData.actionResponders || [];
+    if (actionResponders.includes(blockerId)) {
+      throw new Error('You have already responded to this action');
+    }
+    
+    // Add this player to the action responders list
+    actionResponders.push(blockerId);
+    
     // Create blockBy object
     const pendingBlockBy = {
       player: playerBlocker,
@@ -1099,6 +1116,7 @@ export const performBlock = async (gameId: string, blockerId: number, blockingCh
     // Update game state
     await updateDoc(gameRef, {
       pendingBlockBy: pendingBlockBy,
+      actionResponders: actionResponders,
       log: arrayUnion(logEntry),
       lastUpdated: Timestamp.now()
     });
