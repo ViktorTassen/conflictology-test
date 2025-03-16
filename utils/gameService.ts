@@ -901,7 +901,7 @@ export const performChallenge = async (gameId: string, challengerId: number) => 
       
       // Get the card and create a copy of the deck
       const revealedCard = { ...challenged.cards[cardIndex] };
-      const updatedDeck = [...gameData.deck, revealedCard];
+      let updatedDeck = [...gameData.deck, revealedCard];
       
       // Shuffle the deck
       for (let i = updatedDeck.length - 1; i > 0; i--) {
@@ -938,14 +938,85 @@ export const performChallenge = async (gameId: string, challengerId: number) => 
       const returnLog = `${challenged.name} returns the revealed card to the deck and draws a new one`;
       const loseLog = `${playerChallenger.name} loses influence`;
       
-      // Update game state
-      await updateDoc(gameRef, {
-        players: updatedPlayers,
-        deck: updatedDeck,
-        pendingAction: pendingAction,
-        log: arrayUnion(logEntry, failedLog, returnLog, loseLog),
-        lastUpdated: Timestamp.now()
-      });
+      // Special handling for assassination challenges where the challenger is the target
+      const wasAssassination = gameData.pendingAction.type === 'assassinate';
+      const challengerIsTarget = wasAssassination && gameData.pendingAction.target?.id === playerChallenger.id;
+      
+      if (wasAssassination && challengerIsTarget) {
+        // For assassination challenges where challenger is target, immediately eliminate the player
+        // First, mark all their cards as eliminated
+        const challengerIndex = updatedPlayers.findIndex(p => p.id === playerChallenger.id);
+        
+        // Make sure we have an updated deck to work with
+        const updatedDeckCopy = [...updatedDeck];
+        
+        // Mark each card as eliminated and add to deck
+        updatedPlayers[challengerIndex].cards.forEach(card => {
+          if (!card.eliminated) {
+            card.eliminated = true;
+            // Return card to deck
+            updatedDeckCopy.push({ ...card, eliminated: false });
+          }
+        });
+        
+        // Update our reference to the updated deck
+        updatedDeck = updatedDeckCopy;
+        
+        // Mark player as eliminated
+        updatedPlayers[challengerIndex].eliminated = true;
+        
+        // Add special log messages
+        const eliminatedLog = `${playerChallenger.name} is eliminated after losing challenge to assassination`;
+        
+        // Check if game is over after elimination
+        const remainingPlayers = updatedPlayers.filter(p => !p.eliminated);
+        let gameStateValue = gameData.gameState;
+        let winner = undefined;
+        let additionalLogs = [];
+        
+        if (remainingPlayers.length === 1) {
+          gameStateValue = 'gameover';
+          winner = remainingPlayers[0];
+          additionalLogs.push(`Game over! ${remainingPlayers[0].name} wins!`);
+          additionalLogs.push('Players may vote to start a new game with the same participants.');
+        }
+        
+        // Update game state - player eliminated, possibly game over
+        // Determine next player
+        const nextPlayerIndex = findNextPlayerIndex(updatedPlayers, gameData.currentPlayerIndex);
+        
+        if (winner) {
+          await updateDoc(gameRef, {
+            players: updatedPlayers,
+            deck: updatedDeck,
+            pendingAction: null,
+            currentPlayerIndex: nextPlayerIndex,
+            gameState: gameStateValue,
+            winner: winner,
+            newGameVotes: [],
+            log: arrayUnion(logEntry, failedLog, returnLog, eliminatedLog, ...additionalLogs),
+            lastUpdated: Timestamp.now()
+          });
+        } else {
+          await updateDoc(gameRef, {
+            players: updatedPlayers,
+            deck: updatedDeck,
+            pendingAction: null,
+            currentPlayerIndex: nextPlayerIndex,
+            log: arrayUnion(logEntry, failedLog, returnLog, eliminatedLog),
+            lastUpdated: Timestamp.now()
+          });
+        }
+      } else {
+        // Regular challenge failure - only lose one influence
+        await updateDoc(gameRef, {
+          players: updatedPlayers,
+          deck: updatedDeck,
+          pendingAction: pendingAction,
+          log: arrayUnion(logEntry, failedLog, returnLog, loseLog),
+          lastUpdated: Timestamp.now()
+        });
+      }
       
       return true;
     } else {
@@ -1093,7 +1164,7 @@ export const performChallengeBlock = async (gameId: string, challengerId: number
       
       // Get the card and create a copy of the deck
       const revealedCard = { ...challenged.cards[cardIndex] };
-      const updatedDeck = [...gameData.deck, revealedCard];
+      let updatedDeck = [...gameData.deck, revealedCard];
       
       // Shuffle the deck
       for (let i = updatedDeck.length - 1; i > 0; i--) {
@@ -1159,34 +1230,69 @@ export const performChallengeBlock = async (gameId: string, challengerId: number
       // Special handling for assassination
       if (wasAssassination && gameData.pendingAction?.target?.id === challenged.id) {
         // The failed blocker is also the assassination target
-        // They will now lose TWO influences: one for the failed challenge, then one for the assassination
+        // Immediately eliminate the player (all cards)
         
-        // First add a specific log for this special case
-        extraLogs.push(`${challenged.name} will lose two influences: one for the failed challenge and one for the assassination`);
+        const challengedIndex = updatedPlayers.findIndex(p => p.id === challenged.id);
         
-        // Mark player as needing to lose 2 influences (we'll track this in a new field)
-        // First we'll lose one influence for the failed challenge
-        const pendingAction: GameAction = {
-          type: 'loseInfluence',
-          player: challenged,
-          loseInfluence: true
-        };
+        // Create updated deck
+        const updatedDeck = [...gameData.deck];
         
-        // Store the assassination action to be handled after losing the first influence
-        // This will ensure the player must lose two influences
-        await updateDoc(gameRef, {
-          players: updatedPlayers,
-          pendingAction: pendingAction,
-          pendingBlockBy: null,
-          nextPendingAction: { 
-            type: 'loseInfluence',
-            player: challenged,
-            loseInfluence: true,
-            reason: 'assassination'
-          },
-          log: arrayUnion(logEntry, succeededLog, failedLog, ...extraLogs),
-          lastUpdated: Timestamp.now()
+        // Mark each card as eliminated and add to deck
+        updatedPlayers[challengedIndex].cards.forEach(card => {
+          if (!card.eliminated) {
+            card.eliminated = true;
+            // Return card to deck
+            updatedDeck.push({ ...card, eliminated: false });
+          }
         });
+        
+        // Mark player as eliminated
+        updatedPlayers[challengedIndex].eliminated = true;
+        
+        // Add special log message
+        const eliminatedLog = `${challenged.name} is eliminated after failing to block assassination`;
+        extraLogs.push(eliminatedLog);
+        
+        // Check if game is over after elimination
+        const remainingPlayers = updatedPlayers.filter(p => !p.eliminated);
+        let gameStateValue = gameData.gameState;
+        let winner = undefined;
+        
+        if (remainingPlayers.length === 1) {
+          gameStateValue = 'gameover';
+          winner = remainingPlayers[0];
+          extraLogs.push(`Game over! ${remainingPlayers[0].name} wins!`);
+          extraLogs.push('Players may vote to start a new game with the same participants.');
+        }
+        
+        // Calculate next player index
+        const nextPlayerIndex = findNextPlayerIndex(updatedPlayers, gameData.currentPlayerIndex);
+        
+        // Update game state
+        if (winner) {
+          await updateDoc(gameRef, {
+            players: updatedPlayers,
+            pendingAction: null,
+            pendingBlockBy: null,
+            currentPlayerIndex: nextPlayerIndex,
+            gameState: gameStateValue,
+            winner: winner,
+            newGameVotes: [],
+            deck: updatedDeck,
+            log: arrayUnion(logEntry, succeededLog, failedLog, ...extraLogs),
+            lastUpdated: Timestamp.now()
+          });
+        } else {
+          await updateDoc(gameRef, {
+            players: updatedPlayers,
+            pendingAction: null,
+            pendingBlockBy: null,
+            currentPlayerIndex: nextPlayerIndex,
+            deck: updatedDeck,
+            log: arrayUnion(logEntry, succeededLog, failedLog, ...extraLogs),
+            lastUpdated: Timestamp.now()
+          });
+        }
       } else {
         // Standard case for failed blocks (non-assassination or block by a different player)
         const pendingAction: GameAction = {
@@ -1255,57 +1361,96 @@ export const performLoseInfluence = async (gameId: string, playerId: number, car
     // Get live cards (not eliminated)
     const aliveCards = player.cards.filter(card => !card.eliminated);
     
-    // If player only has one card, automatically select that card
-    let finalCardIndex = cardIndex;
-    if (aliveCards.length === 1) {
-      // Find the index of the only alive card
-      finalCardIndex = player.cards.findIndex(card => !card.eliminated);
-      console.log(`Player ${playerId} has only one card. Auto-selecting card at index ${finalCardIndex}`);
-    }
-    
-    // Check if the card exists and is not already eliminated
-    if (!player.cards[finalCardIndex] || player.cards[finalCardIndex].eliminated) {
-      throw new Error('Invalid card selection');
-    }
-    
-    // Update the player's card to be eliminated
+    // Update players array
     const updatedPlayers = [...gameData.players];
     const playerIndex = updatedPlayers.findIndex(p => p.id === playerId);
     
-    // Create a deep copy of the player's cards
-    const updatedCards = [...updatedPlayers[playerIndex].cards];
-    updatedCards[finalCardIndex] = {
-      ...updatedCards[finalCardIndex],
-      eliminated: true
-    };
-    
-    // Update the player with the new cards
-    updatedPlayers[playerIndex] = {
-      ...updatedPlayers[playerIndex],
-      cards: updatedCards
-    };
-    
-    // Check if the player is now eliminated (all cards eliminated)
-    const isEliminated = updatedCards.every(card => card.eliminated);
-    if (isEliminated) {
-      updatedPlayers[playerIndex].eliminated = true;
+    // If player has only one card left, immediately eliminate them
+    if (aliveCards.length === 1) {
+      // Get the last alive card to return to deck
+      const lastCardIndex = player.cards.findIndex(card => !card.eliminated);
+      const lastCard = player.cards[lastCardIndex];
+      
+      console.log(`Player ${playerId} has only one card. Automatically eliminating player.`);
+      
+      // Update all cards to be eliminated
+      const updatedCards = player.cards.map(card => ({
+        ...card,
+        eliminated: true
+      }));
+      
+      // Update the player's cards and mark as eliminated
+      updatedPlayers[playerIndex] = {
+        ...updatedPlayers[playerIndex],
+        cards: updatedCards,
+        eliminated: true
+      };
+      
+      // Return the card to the deck
+      const updatedDeck = [...gameData.deck, { ...lastCard, eliminated: false }];
+      
+      // Shuffle the deck
+      for (let i = updatedDeck.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [updatedDeck[i], updatedDeck[j]] = [updatedDeck[j], updatedDeck[i]];
+      }
+      
+      // Replace original deck with updated deck
+      gameData.deck = updatedDeck;
+    } else {
+      // Multiple cards - player selects which to lose
+      let finalCardIndex = cardIndex;
+      
+      // Check if the card exists and is not already eliminated
+      if (!player.cards[finalCardIndex] || player.cards[finalCardIndex].eliminated) {
+        throw new Error('Invalid card selection');
+      }
+      
+      // Create a deep copy of the player's cards
+      const updatedCards = [...updatedPlayers[playerIndex].cards];
+      updatedCards[finalCardIndex] = {
+        ...updatedCards[finalCardIndex],
+        eliminated: true
+      };
+      
+      // Update the player with the new cards
+      updatedPlayers[playerIndex] = {
+        ...updatedPlayers[playerIndex],
+        cards: updatedCards
+      };
+      
+      // Check if the player is now eliminated (all cards eliminated)
+      const isEliminated = updatedCards.every(card => card.eliminated);
+      if (isEliminated) {
+        updatedPlayers[playerIndex].eliminated = true;
+      }
     }
     
-    // Get the character that was eliminated
-    const eliminatedCharacter = player.cards[finalCardIndex].character;
+    // Create log messages
+    let logEntry;
+    let updatedDeck;
     
-    // Return the eliminated card to the deck
-    const updatedDeck = [...gameData.deck];
-    updatedDeck.push({ character: eliminatedCharacter, eliminated: false });
-    
-    // Shuffle the deck
-    for (let i = updatedDeck.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [updatedDeck[i], updatedDeck[j]] = [updatedDeck[j], updatedDeck[i]];
+    if (aliveCards.length === 1) {
+      // Player was completely eliminated
+      logEntry = `${player.name} was eliminated`;
+      updatedDeck = gameData.deck; // Deck was already updated in the elimination logic
+    } else {
+      // Player lost one influence but still has cards
+      const eliminatedCharacter = player.cards[cardIndex].character;
+      
+      // Return the eliminated card to the deck
+      updatedDeck = [...gameData.deck];
+      updatedDeck.push({ character: eliminatedCharacter, eliminated: false });
+      
+      // Shuffle the deck
+      for (let i = updatedDeck.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [updatedDeck[i], updatedDeck[j]] = [updatedDeck[j], updatedDeck[i]];
+      }
+      
+      // Add log entry without revealing the card
+      logEntry = `${player.name} lost influence`;
     }
-    
-    // Add log entry without revealing the card
-    const logEntry = `${player.name} lost influence`;
     
     // Determine next player if the current action is complete
     const originalAction = gameData.pendingAction.type;
@@ -1339,22 +1484,96 @@ export const performLoseInfluence = async (gameId: string, playerId: number, car
     
     // If there is a next pending action (e.g., for assassination after failed block challenge)
     if (nextPendingAction && nextPendingAction.type === 'loseInfluence' && nextPendingAction.player?.id === playerId) {
-      // Player needs to lose a second influence
-      // Set it as the new pending action and clear the nextPendingAction
-      const nextAction = { ...nextPendingAction };
+      // For special assassination case, immediately lose the second influence
+      // Get the updated player after first influence loss
+      const updatedPlayer = updatedPlayers.find(p => p.id === playerId);
       
-      // Add log entry about losing second influence
-      const reason = nextPendingAction.reason ? ` due to ${nextPendingAction.reason}` : '';
-      const secondLoseLog = `${player.name} must now lose a second influence${reason}`;
-      
-      await updateDoc(gameRef, {
-        players: updatedPlayers,
-        pendingAction: nextAction,
-        nextPendingAction: null, // Clear this so we don't loop forever
-        deck: updatedDeck,
-        log: arrayUnion(logEntry, secondLoseLog),
-        lastUpdated: Timestamp.now()
-      });
+      if (!updatedPlayer || updatedPlayer.eliminated) {
+        // If player is already eliminated after first loss, just clear the nextPendingAction
+        await updateDoc(gameRef, {
+          players: updatedPlayers,
+          pendingAction: null,
+          nextPendingAction: null,
+          currentPlayerIndex: nextPlayerIndex,
+          gameState: gameStateValue,
+          deck: updatedDeck,
+          log: arrayUnion(logEntry),
+          lastUpdated: Timestamp.now()
+        });
+      } else {
+        // Player still has cards - automatically lose the second influence
+        const remainingCards = updatedPlayer.cards.filter(card => !card.eliminated);
+        
+        if (remainingCards.length > 0) {
+          // Find the index of the first non-eliminated card
+          const secondCardIndex = updatedPlayer.cards.findIndex(card => !card.eliminated);
+          
+          // Update the player's second card to be eliminated
+          updatedPlayer.cards[secondCardIndex].eliminated = true;
+          
+          // Get the character that was eliminated for the second card
+          const secondEliminatedCharacter = updatedPlayer.cards[secondCardIndex].character;
+          
+          // Return the eliminated card to the deck
+          updatedDeck.push({ character: secondEliminatedCharacter, eliminated: false });
+          
+          // Check if player is now eliminated
+          if (updatedPlayer.cards.every(card => card.eliminated)) {
+            updatedPlayer.eliminated = true;
+          }
+          
+          // Add log entries
+          const reason = nextPendingAction.reason ? ` due to ${nextPendingAction.reason}` : '';
+          const secondLoseLog = `${player.name} automatically lost second influence${reason}`;
+          const secondCardLog = `${player.name} lost influence`;
+          
+          // Recheck if game is over after second card loss
+          const remainingPlayers = updatedPlayers.filter(p => !p.eliminated && p.cards.some(c => !c.eliminated));
+          if (remainingPlayers.length === 1) {
+            gameStateValue = 'gameover';
+            winner = remainingPlayers[0];
+            const winnerLog = `Game over! ${remainingPlayers[0].name} wins!`;
+            const newGameLog = 'Players may vote to start a new game with the same participants.';
+            
+            await updateDoc(gameRef, {
+              players: updatedPlayers,
+              pendingAction: null,
+              nextPendingAction: null,
+              currentPlayerIndex: nextPlayerIndex,
+              gameState: gameStateValue,
+              deck: updatedDeck,
+              log: arrayUnion(logEntry, secondLoseLog, secondCardLog, winnerLog, newGameLog),
+              winner: remainingPlayers[0],
+              newGameVotes: [],
+              lastUpdated: Timestamp.now()
+            });
+          } else {
+            // Game continues
+            await updateDoc(gameRef, {
+              players: updatedPlayers,
+              pendingAction: null,
+              nextPendingAction: null,
+              currentPlayerIndex: nextPlayerIndex,
+              gameState: gameStateValue,
+              deck: updatedDeck,
+              log: arrayUnion(logEntry, secondLoseLog, secondCardLog),
+              lastUpdated: Timestamp.now()
+            });
+          }
+        } else {
+          // No remaining cards (shouldn't happen, but just in case)
+          await updateDoc(gameRef, {
+            players: updatedPlayers,
+            pendingAction: null,
+            nextPendingAction: null,
+            currentPlayerIndex: nextPlayerIndex,
+            gameState: gameStateValue,
+            deck: updatedDeck,
+            log: arrayUnion(logEntry),
+            lastUpdated: Timestamp.now()
+          });
+        }
+      }
     } else {
       // Normal case - action is complete
       await updateDoc(gameRef, {

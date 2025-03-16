@@ -1157,7 +1157,7 @@ function App() {
                           // Accept the block, which cancels your action
                           try {
                             setProcessingAction(true);
-                            await allowActionToProceed(gameId);
+                            await allowActionToProceed(gameId, playerId!);
                           } catch (err) {
                             setError((err as Error).message);
                           } finally {
