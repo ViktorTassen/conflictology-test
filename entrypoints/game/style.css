@@ -84,13 +84,67 @@ button:disabled {
 
 #actions-panel {
   margin-bottom: 20px;
-  padding: 10px;
+  padding: 15px;
   background-color: #f8f9fa;
   border-radius: 5px;
 }
 
-#basic-actions, #character-actions {
-  margin-top: 10px;
+#action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.action-button {
+  flex: 1 0 150px;
+  padding: 12px 15px;
+  margin: 5px;
+  border: none;
+  border-radius: 5px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.action-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.action-button.income {
+  background-color: #27ae60;
+  color: white;
+}
+
+.action-button.foreign-aid {
+  background-color: #3498db;
+  color: white;
+}
+
+.action-button.tax {
+  background-color: #f1c40f;
+  color: #333;
+}
+
+.action-button.coup {
+  background-color: #e74c3c;
+  color: white;
+}
+
+.action-button.assassinate {
+  background-color: #9b59b6;
+  color: white;
+}
+
+.action-button.steal {
+  background-color: #e67e22;
+  color: white;
+}
+
+.action-button.exchange {
+  background-color: #1abc9c;
+  color: white;
 }
 
 #players-container {
@@ -205,10 +259,141 @@ button:disabled {
 /* Additional styles for the extension game page */
 #action-message {
   margin: 10px 0;
-  padding: 10px;
+  padding: 15px;
   background-color: #f8f9fa;
   border-radius: 5px;
   text-align: center;
+  font-weight: bold;
+}
+
+#action-message.action {
+  background-color: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffeeba;
+}
+
+#action-message.challenge {
+  background-color: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+#action-message.block {
+  background-color: #d1ecf1;
+  color: #0c5460;
+  border: 1px solid #bee5eb;
+}
+
+#reaction-buttons {
+  margin-top: 20px;
+  padding: 15px;
+  background-color: #f8f9fa;
+  border-radius: 5px;
+  border: 1px solid #e9ecef;
+}
+
+#reaction-buttons h3 {
+  margin-bottom: 15px;
+  font-size: 16px;
+}
+
+.reaction-button {
+  margin: 5px;
+  padding: 10px 15px;
+  border-radius: 5px;
+  font-weight: bold;
+  min-width: 150px;
+}
+
+.reaction-button.challenge {
+  background-color: #dc3545;
+  color: white;
+}
+
+.reaction-button.block {
+  background-color: #17a2b8;
+  color: white;
+}
+
+.reaction-button.pass {
+  background-color: #6c757d;
+  color: white;
+}
+
+#reveal-card-section {
+  margin-top: 20px;
+  padding: 15px;
+  background-color: #f8f9fa;
+  border-radius: 5px;
+  border: 1px solid #e9ecef;
+}
+
+.reveal-card-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.card-button {
+  width: 100px;
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  font-weight: bold;
+  color: white;
+}
+
+#block-response-section {
+  margin-top: 20px;
+  padding: 15px;
+  background-color: #f8f9fa;
+  border-radius: 5px;
+  border: 1px solid #e9ecef;
+  text-align: center;
+}
+
+#block-response-section h3 {
+  margin-bottom: 15px;
+  font-size: 16px;
+}
+
+.block-response-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  justify-content: center;
+}
+
+.challenge-block-button, .accept-block-button {
+  padding: 12px 20px;
+  border: none;
+  border-radius: 5px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex: 1;
+  min-width: 200px;
+}
+
+.challenge-block-button {
+  background-color: #dc3545;
+  color: white;
+}
+
+.challenge-block-button:hover {
+  background-color: #c82333;
+}
+
+.accept-block-button {
+  background-color: #6c757d;
+  color: white;
+}
+
+.accept-block-button:hover {
+  background-color: #5a6268;
 }
 
 .player-area.current {

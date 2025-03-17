@@ -1,3 +1,6 @@
+import { defineBackground } from 'wxt/sandbox';
+import { browser } from 'wxt/browser';
+
 export default defineBackground(() => {
   console.log('Coup Card Game Extension Background Service Started');
   
