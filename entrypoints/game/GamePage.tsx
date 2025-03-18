@@ -439,58 +439,76 @@ export function GamePage() {
         {/* Regular turn actions */}
         {isCurrentTurn && currentGame.gameState === 'play' && (
           <div id="action-buttons">
-            <button 
-              className="action-button income" 
-              onClick={() => handleAction('income')}
-            >
-              Income (+1 coin)
-            </button>
-            
-            <button 
-              className="action-button foreign-aid" 
-              onClick={() => handleAction('foreign_aid')}
-            >
-              Foreign Aid (+2 coins)
-            </button>
-            
-            <button 
-              className="action-button tax" 
-              onClick={() => handleAction('tax')}
-            >
-              Tax (+3 coins)
-            </button>
-            
-            {currentPlayer && currentPlayer.coins >= 7 && (
-              <button 
-                className="action-button coup" 
-                onClick={() => handleShowTargetSelection('coup')}
-              >
-                Coup (7 coins)
-              </button>
+            {/* When a player has 10+ coins, they must coup - show only coup action */}
+            {currentPlayer && currentPlayer.coins >= 10 ? (
+              <>
+                <div className="must-coup-message">
+                  You have 10+ coins and must perform a Coup action
+                </div>
+                <button 
+                  className="action-button coup mandatory-coup" 
+                  onClick={() => handleShowTargetSelection('coup')}
+                >
+                  Coup (7 coins) - MANDATORY
+                </button>
+              </>
+            ) : (
+              /* Normal actions when player has less than 10 coins */
+              <>
+                <button 
+                  className="action-button income" 
+                  onClick={() => handleAction('income')}
+                >
+                  Income (+1 coin)
+                </button>
+                
+                <button 
+                  className="action-button foreign-aid" 
+                  onClick={() => handleAction('foreign_aid')}
+                >
+                  Foreign Aid (+2 coins)
+                </button>
+                
+                <button 
+                  className="action-button tax" 
+                  onClick={() => handleAction('tax')}
+                >
+                  Tax (+3 coins)
+                </button>
+                
+                {currentPlayer && currentPlayer.coins >= 7 && (
+                  <button 
+                    className="action-button coup" 
+                    onClick={() => handleShowTargetSelection('coup')}
+                  >
+                    Coup (7 coins)
+                  </button>
+                )}
+                
+                {currentPlayer && currentPlayer.coins >= 3 && (
+                  <button 
+                    className="action-button assassinate" 
+                    onClick={() => handleShowTargetSelection('assassinate')}
+                  >
+                    Assassinate (3 coins)
+                  </button>
+                )}
+                
+                <button 
+                  className="action-button steal" 
+                  onClick={() => handleShowTargetSelection('steal')}
+                >
+                  Steal (Captain)
+                </button>
+                
+                <button 
+                  className="action-button exchange" 
+                  onClick={() => handleAction('exchange')}
+                >
+                  Exchange Cards (Ambassador)
+                </button>
+              </>
             )}
-            
-            {currentPlayer && currentPlayer.coins >= 3 && (
-              <button 
-                className="action-button assassinate" 
-                onClick={() => handleShowTargetSelection('assassinate')}
-              >
-                Assassinate (3 coins)
-              </button>
-            )}
-            
-            <button 
-              className="action-button steal" 
-              onClick={() => handleShowTargetSelection('steal')}
-            >
-              Steal (Captain)
-            </button>
-            
-            <button 
-              className="action-button exchange" 
-              onClick={() => handleAction('exchange')}
-            >
-              Exchange Cards (Ambassador)
-            </button>
           </div>
         )}
         
