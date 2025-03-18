@@ -43,6 +43,7 @@ export interface IGameValidationService {
 export interface IGameEndService {
   voteForRestart(gameId: string, playerId: PlayerID): Promise<void>;
   cancelRestartVote(gameId: string, playerId: PlayerID): Promise<void>;
+  forceRestartGame(gameId: string, playerId: PlayerID): Promise<void>; // Force restart for host
 }
 
 // Combined interface for the main service

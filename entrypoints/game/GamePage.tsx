@@ -25,7 +25,9 @@ export function GamePage() {
     blockAction,
     challengeAction,
     revealCard,
-    completeExchange
+    completeExchange,
+    isHostPlayer,
+    forceRestartGame
   } = useGameStore();
   
   // State for target selection
@@ -327,6 +329,22 @@ export function GamePage() {
       <div id="current-player-info">
         <h2>Current Player: <span id="current-player-name">{currentGame.players[currentGame.currentPlayerIndex]?.name}</span></h2>
         <div>Your Player: {currentPlayer?.name}</div>
+        
+        {/* Host-only force restart button */}
+        {isHostPlayer() && (
+          <div className="host-controls">
+            <button 
+              className="restart-button"
+              onClick={() => {
+                if (window.confirm('Are you sure you want to restart the game? This will reset the game for all players.')) {
+                  forceRestartGame();
+                }
+              }}
+            >
+              Force Restart Game
+            </button>
+          </div>
+        )}
       </div>
 
       <div id="actions-panel">

@@ -116,6 +116,45 @@ export class GameService implements IGameService {
       await this.repository.updateGame(game);
     }
   }
+  
+  // Method to force restart a game (host only)
+  async forceRestartGame(gameId: string, playerId: PlayerID): Promise<void> {
+    const game = await this.repository.getGame(gameId);
+    if (!game) throw new Error('Game not found');
+    
+    // Check if player is the host (first player)
+    if (game.players.length === 0 || game.players[0].id !== playerId) {
+      throw new Error('Only the host can force restart the game');
+    }
+    
+    // Log the action
+    const player = game.players.find(p => p.id === playerId);
+    await this.addGameLog(gameId, `${player?.name || 'Host'} forced a game restart`);
+    
+    // Reset the game state
+    game.gameState = 'setup';
+    game.currentPlayerIndex = 0;
+    game.currentAction = undefined;
+    game.pendingActionFrom = undefined;
+    game.restartVotes = [];
+    game.deck = [];
+    
+    // Reset all players
+    for (const player of game.players) {
+      player.eliminated = false;
+      player.coins = 0;
+      player.cards = [];
+    }
+    
+    // Add log
+    game.logs.push(this.createLog('Game restarted by host'));
+    
+    // Update game state
+    await this.repository.updateGame(game);
+    
+    // Start the new game immediately
+    await this.startGame(game.id);
+  }
 
   // #region IGameLifecycleService Implementation
   

@@ -386,6 +386,34 @@ button:disabled {
   margin-top: 10px;
 }
 
+/* Host controls for restarting game */
+.host-controls {
+  margin-top: 15px;
+  padding: 10px;
+  background-color: #f8f9fa;
+  border-radius: 5px;
+  border: 1px solid #ffecb5;
+  background-color: #fff3cd;
+}
+
+.restart-button {
+  background-color: #dc3545;
+  color: white;
+  font-weight: bold;
+  font-size: 14px;
+  padding: 10px 15px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.restart-button:hover {
+  background-color: #c82333;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
 @keyframes pulse {
   0% { opacity: 0.7; }
   50% { opacity: 1; }

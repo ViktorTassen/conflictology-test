@@ -49,6 +49,8 @@ interface GameState {
   // Game end and restart
   voteForRestart: () => Promise<void>;
   cancelRestartVote: () => Promise<void>;
+  forceRestartGame: () => Promise<void>; // Added for host to force restart game
+  isHostPlayer: () => boolean; // Added to check if current player is host
   hasVotedToRestart: () => boolean;
   getRestartVoteCount: () => number;
   getTotalPlayerCount: () => number;
@@ -414,6 +416,35 @@ export const useGameStore = create<GameState>()(
       } finally {
         set({ loading: false });
       }
+    },
+    
+    forceRestartGame: async () => {
+      const { gameId, playerId } = get();
+      
+      if (!gameId || !playerId) {
+        set({ error: 'No active game or player' });
+        return;
+      }
+      
+      set({ loading: true, error: null });
+      try {
+        await gameService.forceRestartGame(gameId, playerId);
+      } catch (error) {
+        set({ error: (error as Error).message });
+      } finally {
+        set({ loading: false });
+      }
+    },
+    
+    isHostPlayer: () => {
+      const { currentGame, playerId } = get();
+      
+      if (!currentGame || !playerId || currentGame.players.length === 0) {
+        return false;
+      }
+      
+      // Host is the first player in the players array
+      return currentGame.players[0].id === playerId;
     },
     
     hasVotedToRestart: () => {
