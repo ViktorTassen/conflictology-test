@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from '../domain/types/game';
 
 interface CardRevealProps {
@@ -18,6 +18,11 @@ const CardReveal: React.FC<CardRevealProps> = ({
 }) => {
   const [selectedCards, setSelectedCards] = useState<number[]>([]);
   const allCards = [...activeCards, ...drawnCards];
+  
+  // Clear selection when props change
+  useEffect(() => {
+    setSelectedCards([]);
+  }, [activeCards, drawnCards, maxSelect]);
 
   const toggleCardSelection = (index: number) => {
     if (selectedCards.includes(index)) {
@@ -32,7 +37,9 @@ const CardReveal: React.FC<CardRevealProps> = ({
   };
 
   const handleComplete = () => {
+    // Only allow completion when exactly maxSelect cards are selected
     if (selectedCards.length === maxSelect) {
+      console.log('Selected cards indices:', selectedCards);
       onComplete(selectedCards);
     }
   };
@@ -172,7 +179,17 @@ const CardReveal: React.FC<CardRevealProps> = ({
       <div style={styles.container}>
         <div style={styles.title}>Exchange Cards</div>
         <div style={styles.subtitle}>
-          Select {maxSelect} cards to keep. The rest will be returned to the deck.
+          {activeCards.length === 1 
+            ? `Select ${maxSelect} card to keep from all cards shown below (your current card and the 2 newly drawn cards).` 
+            : `Select ${maxSelect} cards to keep. The rest will be returned to the deck.`}
+        </div>
+        <div style={{...styles.subtitle, fontSize: '0.9rem', color: '#2ecc71'}}>
+          {maxSelect === 1 
+            ? "You must select exactly 1 card to keep. Choose any card from your current card or the drawn cards."
+            : `You must select exactly ${maxSelect} cards to keep.`}
+        </div>
+        <div style={{...styles.subtitle, fontSize: '0.85rem', color: '#e74c3c', marginTop: '5px'}}>
+          {`${activeCards.length + drawnCards.length - maxSelect} cards will be returned to the deck.`}
         </div>
 
         <div style={styles.cardSection}>

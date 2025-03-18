@@ -1,56 +1,47 @@
-Implementation Notes
+Basic Action: Exchange (Ambassador)
 
-Action Declaration Stage:
+Player Action: Player announces "Exchange" to swap their cards with new ones from the Court deck.
+Valid When: Always available (no coin requirement).
+Basic Effect: Player draws 2 cards from the deck, chooses which to keep, and returns 2 cards.
 
-Player declares "Exchange"
-System should prompt all other players for possible challenges (with a time limit)
+Response Scenarios
 
+Scenario 1 (Exchange success)
 
-Challenge Resolution Stage:
+Player A declares Exchange.
+UI changes: Player A waits for resolving.
+UI changes: Players B and C see 2 options: "Challenge Ambassador" and "Allow action".
+When all players click "Allow action," it resolves the voting.
+Effect: Player A draws 2 new cards, chooses which to keep, and returns 2 cards to the deck.
+Turn ends, next player begins.
 
-If challenged, system handles card reveals and influence loss
-System manages card replacements
+Scenario 2A 
 
+Player A declares Exchange.
+UI changes: Player A waits for resolving.
+UI changes: Players B and C see 2 options: "Challenge Ambassador" and "Allow action".
 
-Exchange Execution Stage:
+Player B clicks "Challenge Ambassador" (claims Player A doesn't have Ambassador).
+If Player A has Ambassador:
+It resolves this voting immideately.
+The Ambassador is revealed and then shuffled back into the deck.
+Player A draws a replacement card
+Player A draws 2 new cards, chooses which to keep, and returns 2 cards to the deck.
+Player B loses one influence (discards a card of their choice)
+Turn ends, next player begins.
 
-System draws appropriate number of cards for player
-System presents all cards to player (old and new)
-System allows player to select which cards to keep
-System returns remaining cards to deck and shuffles
+Scenario 2B 
 
+Player A declares Exchange.
+UI changes: Player A waits for resolving.
+UI changes: Players B and C see 2 options: "Challenge Ambassador" and "Allow action".
+Player B clicks "Challenge Ambassador" (claims Player A doesn't have Ambassador).
 
-Privacy Considerations:
+If Player A does NOT have Ambassador:
+It resolves this voting immideately.
+The Ambassador is revealed and then shuffled back into the deck.
+Player A draws a replacement card
+Player A draws 2 new cards, chooses which to keep, and returns 2 cards to the deck.
+Player B loses one influence (discards a card of their choice)
+Turn ends, next player begins.
 
-Only the active player should see the cards drawn during Exchange
-Other players should see only the number of cards being exchanged
-System should never reveal the returned cards to other players
-
-
-UI Elements for Exchange Action:
-
-Private card selection screen for the active player
-Card array showing all available cards (current + drawn)
-Selection mechanism (check boxes, drag-and-drop, etc.)
-Confirmation button to finalize selections
-Visual indication of how many cards must be returned
-
-
-Timing Considerations:
-
-Reasonable time limit for card selection (30-60 seconds)
-Warning when time is running low
-Auto-selection of cards if time expires (keep current cards)
-
-
-Animation Elements:
-
-Cards being drawn from deck
-Card shuffling animation when returning cards
-Clear visual distinction between kept and returned cards
-
-
-Special Case:
-
-If player has only one influence remaining, they draw 2 cards, but only select 1 to keep
-System should adjust UI accordingly based on player's current influence count

@@ -115,7 +115,23 @@ export function GamePage() {
     
     try {
       console.log(`Completing exchange with selected indices: ${selectedIndices.join(', ')}`);
-      // Use the new selectExchangeCards function
+      
+      // Fix for the bug: make sure we log the selected indices for debugging
+      const currentPlayer = currentGame?.players.find(p => p.id === playerId);
+      const activeCards = currentPlayer?.cards.filter(card => !card.eliminated) || [];
+      const exchangeCards = currentGame?.currentAction?.exchangeCards || [];
+      
+      console.log('Exchange details:', {
+        activeCards: activeCards.map(c => c.character),
+        exchangeCards: exchangeCards.map(c => c.character),
+        selectedIndices,
+        selectedCards: selectedIndices.map(idx => {
+          const allCards = [...activeCards, ...exchangeCards];
+          return idx < allCards.length ? allCards[idx].character : 'unknown';
+        })
+      });
+      
+      // Use the selectExchangeCards function
       await useGameStore.getState().selectExchangeCards(selectedIndices);
       console.log('Exchange completed successfully');
     } catch (error) {
@@ -678,7 +694,7 @@ export function GamePage() {
         <CardReveal
           activeCards={currentPlayer.cards.filter(card => !card.eliminated)}
           drawnCards={currentGame.currentAction.exchangeCards}
-          maxSelect={Math.min(2, currentPlayer.cards.filter(card => !card.eliminated).length + currentGame.currentAction.exchangeCards.length)}
+          maxSelect={currentPlayer.cards.filter(card => !card.eliminated).length}
           onComplete={handleCompleteExchange}
           onCancel={handleCancelExchange}
         />

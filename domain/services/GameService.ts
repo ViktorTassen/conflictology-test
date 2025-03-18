@@ -532,10 +532,19 @@ export class GameService implements IGameService {
         // If player has the claimed character
         if (requiredCharacter && revealedCard.character === requiredCharacter) {
           // Challenge failed, challenger loses influence
-          await this.addGameLog(
-            gameId, 
-            `${player.name} revealed ${revealedCard.character} to prove the claim. The action succeeds.`
-          );
+          
+          // Special handling for Exchange action
+          if (actionType === 'exchange') {
+            await this.addGameLog(
+              gameId, 
+              `${player.name} revealed Ambassador to prove the claim. The Exchange action continues.`
+            );
+          } else {
+            await this.addGameLog(
+              gameId, 
+              `${player.name} revealed ${revealedCard.character} to prove the claim. The action succeeds.`
+            );
+          }
           
           // Replace the card
           this.replacePlayerCard(game, player, cardIndex);
@@ -544,19 +553,35 @@ export class GameService implements IGameService {
           game.gameState = 'lose_influence';
           game.pendingActionFrom = challengerId;
           
-          await this.addGameLog(
-            gameId, 
-            `${challenger.name} must lose an influence for the failed challenge.`
-          );
+          if (actionType === 'exchange') {
+            await this.addGameLog(
+              gameId, 
+              `${challenger.name} must lose an influence for the failed challenge against ${player.name}'s Ambassador.`
+            );
+          } else {
+            await this.addGameLog(
+              gameId, 
+              `${challenger.name} must lose an influence for the failed challenge.`
+            );
+          }
           
           // After challenger loses influence, the action will be executed
           game.currentAction.isResolved = false;
         } else {
           // Challenge successful, action player loses influence and action fails
-          await this.addGameLog(
-            gameId, 
-            `${player.name} revealed ${revealedCard.character} which is not ${requiredCharacter}. The action fails.`
-          );
+          
+          // Special handling for Exchange action
+          if (actionType === 'exchange') {
+            await this.addGameLog(
+              gameId, 
+              `${player.name} revealed ${revealedCard.character} which is not Ambassador. The Exchange action fails.`
+            );
+          } else {
+            await this.addGameLog(
+              gameId, 
+              `${player.name} revealed ${revealedCard.character} which is not ${requiredCharacter}. The action fails.`
+            );
+          }
           
           // Player loses this card
           player.cards[cardIndex].eliminated = true;
@@ -571,6 +596,15 @@ export class GameService implements IGameService {
     }
     
     await this.repository.updateGame(game);
+  }
+  
+  // Helper method to check if a player has the claimed character
+  // This can be used before the player needs to reveal a card
+  private playerHasRequiredCharacter(game: Game, playerId: PlayerID, requiredCharacter: CardCharacter): boolean {
+    const player = game.players.find(p => p.id === playerId);
+    if (!player) return false;
+    
+    return player.cards.some(card => !card.eliminated && card.character === requiredCharacter);
   }
 
   async loseInfluence(gameId: string, playerId: PlayerID, cardIndex: number): Promise<void> {
@@ -618,23 +652,74 @@ export class GameService implements IGameService {
       return;
     }
     
-    // If this was from a challenge and the action isn't resolved yet
-    if (game.currentAction && !game.currentAction.isResolved && game.currentAction.challenge) {
-      // If this was a failed block challenge, resolve the action as blocked
-      if (game.currentAction.challenge.isBlockChallenge && game.currentAction.block) {
-        // The action was blocked successfully
-        await this.addGameLog(
-          gameId, 
-          `The action was blocked successfully.`
-        );
-        this.advanceToNextPlayer(game);
-      } 
-      // If this was a failed action challenge, execute the action
-      else {
-        await this.resolveAction(game);
+    // Handle special cases after a player loses influence
+    if (game.currentAction && game.currentAction.challenge) {
+      const { challengerId, challengedId, isBlockChallenge, isResolved } = game.currentAction.challenge;
+      
+      // If this player was the one challenged (and already lost influence as a result of having lied)
+      if (playerId === challengedId && isResolved) {
+        // This was an automatic influence loss from the handleChallengeResponse method
+        // which means the block failed or the action failed
+        
+        if (isBlockChallenge && game.currentAction.block) {
+          // If it was a Foreign Aid block challenge specifically and the blocker lost
+          if (game.currentAction.action.type === 'foreign_aid' && !game.currentAction.isResolved) {
+            // Complete the Foreign Aid action after the player loses influence
+            const actionPlayer = game.players.find(p => p.id === game.currentAction.action.playerId);
+            if (actionPlayer) {
+              actionPlayer.coins += 2;
+              await this.addGameLog(
+                gameId, 
+                `With the block failed, ${actionPlayer.name} takes foreign aid (+2 coins).`
+              );
+            }
+            this.advanceToNextPlayer(game);
+          } else {
+            // For other block challenges
+            await this.addGameLog(
+              gameId, 
+              `The block failed and the original action continues.`
+            );
+            await this.resolveAction(game);
+          }
+        } else {
+          // For regular action challenges
+          await this.addGameLog(
+            gameId, 
+            `The action failed due to the successful challenge.`
+          );
+          this.advanceToNextPlayer(game);
+        }
       }
-    } 
-    // If this was from a coup or other direct influence loss
+      // If this player was the challenger and lost influence (because their challenge failed)
+      else if (playerId === challengerId) {
+        if (isBlockChallenge && game.currentAction.block) {
+          // Block succeeded, action fails
+          await this.addGameLog(
+            gameId, 
+            `The block succeeded and the action failed.`
+          );
+          this.advanceToNextPlayer(game);
+        } else {
+          // Special handling for Exchange action after a failed challenge
+          if (game.currentAction.action.type === 'exchange') {
+            await this.addGameLog(
+              gameId, 
+              `${game.players.find(p => p.id === game.currentAction?.action.playerId)?.name} continues with the Exchange action.`
+            );
+            await this.resolveAction(game);
+          } else {
+            // Action succeeds after failed challenge
+            await this.resolveAction(game);
+          }
+        }
+      }
+      // For other influence losses (e.g., Coup, Assassinate)
+      else {
+        this.advanceToNextPlayer(game);
+      }
+    }
+    // If there was no challenge or all challenges are resolved
     else {
       this.advanceToNextPlayer(game);
     }
@@ -667,13 +752,19 @@ export class GameService implements IGameService {
     // Get all active player cards
     const activeCards = player.cards.filter(card => !card.eliminated);
     
-    // Combine with exchange cards
+    // Combine with exchange cards (from the deck)
     const allCards = [...activeCards, ...game.currentAction.exchangeCards];
     
-    // The player should keep as many cards as they had active before
-    if (keptCardIndices.length !== activeCards.length) {
-      throw new Error(`You must keep exactly ${activeCards.length} cards`);
+    // The player should keep exactly as many cards as they had active before
+    // (Note: If a player has 1 active card, they should select 1 card from the combined pool of 3 cards)
+    const numActiveCards = activeCards.length;
+    if (keptCardIndices.length !== numActiveCards) {
+      throw new Error(`You must keep exactly ${numActiveCards} card${numActiveCards !== 1 ? 's' : ''}.`);
     }
+    
+    // Log the active card count - will help with debugging
+    console.log(`Exchange validation: Player ${player.name} has ${numActiveCards} active cards, selected ${keptCardIndices.length} cards to keep`);
+    
     
     // Validate indices
     if (keptCardIndices.some(idx => idx < 0 || idx >= allCards.length)) {
@@ -686,27 +777,54 @@ export class GameService implements IGameService {
     // Get the cards to return to the deck
     const returnedCards = allCards.filter((_, idx) => !keptCardIndices.includes(idx));
     
-    // Mark all current cards as eliminated
-    player.cards.forEach(card => card.eliminated = true);
-    
-    // Replace the player's cards
-    keptCards.forEach((card, idx) => {
-      if (idx < player.cards.length) {
-        player.cards[idx] = card;
-      } else {
-        player.cards.push(card);
-      }
+    // Log the original card characters (only visible to server)
+    const originalCards = player.cards.filter(card => !card.eliminated).map(card => card.character);
+    const drawnCards = game.currentAction.exchangeCards.map(card => card.character);
+    const keptCardChars = keptCards.map(card => card.character);
+    console.log(`Exchange by ${player.name}:`, {
+      originalCards,
+      drawnCards,
+      keptCardChars,
+      returnedCards: returnedCards.map(card => card.character)
     });
+    
+    // FIX: Better card management to ensure proper updating of player's hand
+    
+    // Step 1: Back up current active cards indices to know which cards to replace
+    const activeCardIndices = player.cards
+      .map((card, index) => ({ card, index }))
+      .filter(item => !item.card.eliminated)
+      .map(item => item.index);
+    
+    // Step 2: Mark any extra slots as eliminated to make room if needed
+    // This ensures we properly handle cases where a player has fewer than max cards
+    for (let i = 0; i < player.cards.length; i++) {
+      if (!activeCardIndices.includes(i)) {
+        player.cards[i].eliminated = true;
+      }
+    }
+    
+    // Step 3: Replace active cards with the kept cards
+    for (let i = 0; i < keptCards.length; i++) {
+      // If we have an existing card slot to reuse
+      if (i < activeCardIndices.length) {
+        player.cards[activeCardIndices[i]] = keptCards[i];
+      } 
+      // Otherwise add a new card
+      else {
+        player.cards.push(keptCards[i]);
+      }
+    }
     
     // Return the unused cards to the deck
     game.deck.push(...returnedCards);
     
-    // Shuffle the deck
+    // Shuffle the deck after returning cards
     game.deck = this.shuffleDeck(game.deck);
     
     await this.addGameLog(
       gameId, 
-      `${player.name} exchanged cards with the deck.`
+      `${player.name} completed exchanging cards with the court deck.`
     );
     
     // Move to next player
@@ -928,11 +1046,13 @@ export class GameService implements IGameService {
     // Determine who is being challenged
     let challengedId: PlayerID;
     let isBlockChallenge = false;
+    let requiredCharacter: CardCharacter | undefined;
     
     if (game.gameState === 'block_response' && game.currentAction!.block) {
       // Challenging a block
       challengedId = game.currentAction!.block.blockerId;
       isBlockChallenge = true;
+      requiredCharacter = game.currentAction!.block.character;
       
       // Special handling for Foreign Aid block challenges
       if (game.currentAction!.action.type === 'foreign_aid') {
@@ -945,6 +1065,7 @@ export class GameService implements IGameService {
     } else {
       // Challenging the action
       challengedId = game.currentAction!.action.playerId;
+      requiredCharacter = this.rules.getRequiredCharacter(game.currentAction!.action.type);
     }
     
     // Set challenge information
@@ -954,18 +1075,70 @@ export class GameService implements IGameService {
       isBlockChallenge: isBlockChallenge
     };
     
-    // Update game state
-    game.gameState = 'reveal_challenge';
-    game.pendingActionFrom = challengedId;
-    
-    const challenged = game.players.find(p => p.id === challengedId);
-    
-    // Only add this log if we didn't add a more specific one above
-    if (!(isBlockChallenge && game.currentAction!.action.type === 'foreign_aid')) {
+    // Add specific logs for different action types
+    if (isBlockChallenge && game.currentAction!.action.type === 'foreign_aid') {
+      // Already logged in the specific case above
+    } else if (!isBlockChallenge && game.currentAction!.action.type === 'exchange') {
+      const challenged = game.players.find(p => p.id === challengedId);
+      await this.addGameLog(
+        game.id, 
+        `${player.name} challenged ${challenged?.name || 'unknown'}'s claim to have Ambassador.`
+      );
+    } else {
+      const challenged = game.players.find(p => p.id === challengedId);
       await this.addGameLog(
         game.id, 
         `${player.name} challenged ${challenged?.name || 'unknown'}.`
       );
+    }
+    
+    // Check if the challenged player has the required character
+    const challengedPlayer = game.players.find(p => p.id === challengedId);
+    
+    if (challengedPlayer && requiredCharacter) {
+      const hasRequiredCard = this.playerHasRequiredCharacter(game, challengedId, requiredCharacter);
+      
+      if (!hasRequiredCard) {
+        // Player doesn't have the required card
+        // Skip the reveal stage and go straight to losing influence
+        
+        await this.addGameLog(
+          game.id, 
+          `${challengedPlayer.name} doesn't have the ${requiredCharacter} card and must lose influence.`
+        );
+        
+        // Set game state for challenged player to lose influence
+        game.gameState = 'lose_influence';
+        game.pendingActionFrom = challengedId;
+        
+        // Clear the pending challenge since we're handling it here
+        game.currentAction.challenge = {
+          ...game.currentAction.challenge,
+          isResolved: true
+        };
+        
+        // If it was a block challenge for Foreign Aid, the action should now succeed
+        if (isBlockChallenge && game.currentAction.action.type === 'foreign_aid') {
+          const actionPlayer = game.players.find(p => p.id === game.currentAction!.action.playerId);
+          if (actionPlayer) {
+            // Delay giving coins until after losing influence
+            game.currentAction.isResolved = false;
+            await this.addGameLog(
+              game.id, 
+              `The block fails - ${actionPlayer.name} will take Foreign Aid once ${challengedPlayer.name} loses influence.`
+            );
+          }
+        }
+      } else {
+        // Player has the required card, need to reveal
+        // Update game state for player to reveal a card
+        game.gameState = 'reveal_challenge';
+        game.pendingActionFrom = challengedId;
+      }
+    } else {
+      // Default to reveal state if we can't determine the required character
+      game.gameState = 'reveal_challenge';
+      game.pendingActionFrom = challengedId;
     }
   }
   
@@ -1204,6 +1377,7 @@ export class GameService implements IGameService {
           break;
         }
         
+        // According to Exchange.txt scenario 1, the player draws 2 new cards
         // Get two cards from the deck
         const drawnCards = game.deck.slice(-2);
         game.deck = game.deck.slice(0, -2);
@@ -1211,12 +1385,12 @@ export class GameService implements IGameService {
         // Store in the current action
         game.currentAction.exchangeCards = drawnCards;
         
-        // Update game state
+        // Update game state to exchange_selection
         game.gameState = 'exchange_selection';
         
         await this.addGameLog(
           game.id, 
-          `${player.name} successfully exchanged with the court deck.`
+          `${player.name} draws cards from the deck for exchange.`
         );
         break;
         

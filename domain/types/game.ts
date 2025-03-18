@@ -64,6 +64,7 @@ export interface GameAction {
     challengerId: PlayerID;
     challengedId: PlayerID;
     isBlockChallenge: boolean;
+    isResolved?: boolean; // Set to true if challenge was auto-resolved (player had no card)
   };
   
   block?: {
