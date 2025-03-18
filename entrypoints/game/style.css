@@ -550,6 +550,35 @@ button:disabled {
   font-weight: bold;
 }
 
+/* Eliminated message for Assassinate action */
+.eliminated-message,
+.player-eliminated-message {
+  background-color: #f8d7da;
+  color: #721c24;
+  padding: 20px;
+  border-radius: 5px;
+  border: 1px solid #f5c6cb;
+  text-align: center;
+  animation: fadeIn 0.5s ease-in;
+}
+
+.eliminated-message h3,
+.player-eliminated-message h3 {
+  font-size: 1.5rem;
+  margin-bottom: 10px;
+  color: #dc3545;
+}
+
+.eliminated-message p,
+.player-eliminated-message p {
+  font-size: 1.1rem;
+}
+
+@keyframes fadeIn {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
 /* Override some styles for the extension context */
 #game-container {
   max-width: 100%;

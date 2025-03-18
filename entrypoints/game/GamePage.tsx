@@ -63,6 +63,25 @@ export function GamePage() {
       }
     }
   }, [gameId, playerId, currentGame?.id]);
+  
+  // Auto-recovery for UI getting stuck with eliminated players
+  useEffect(() => {
+    // If we detect an eliminated player is in pendingActionFrom, we need to handle it
+    if (currentGame?.gameState === 'lose_influence' && 
+        currentGame.pendingActionFrom && 
+        currentGame.players.find(p => p.id === currentGame.pendingActionFrom)?.eliminated) {
+      
+      console.log('Detected stuck game state with eliminated player in pendingActionFrom');
+      
+      // Immediately attempt to fix the game state by sending a direct refresh request
+      if (gameId) {
+        // Force a game state refresh
+        useGameStore.getState().refreshGameState()
+          .then(() => console.log('Game state refreshed for eliminated player'))
+          .catch((error) => console.error('Error refreshing game state:', error));
+      }
+    }
+  }, [currentGame?.gameState, currentGame?.pendingActionFrom, gameId]);
 
   if (loading) {
     return (
@@ -293,7 +312,10 @@ export function GamePage() {
           {currentGame.gameState === 'action_response' && 'Waiting for players to respond to action'}
           {currentGame.gameState === 'block_response' && 'Waiting for response to block'}
           {currentGame.gameState === 'reveal_challenge' && 'Waiting for player to reveal card'}
-          {currentGame.gameState === 'lose_influence' && 'Waiting for player to lose influence'}
+          {currentGame.gameState === 'lose_influence' && 
+            (currentGame.pendingActionFrom && currentGame.players.find(p => p.id === currentGame.pendingActionFrom)?.eliminated 
+              ? `${currentGame.players.find(p => p.id === currentGame.pendingActionFrom)?.name} has been eliminated!` 
+              : 'Waiting for player to lose influence')}
           {currentGame.gameState === 'exchange_selection' && 'Waiting for player to select cards'}
           {currentGame.gameState === 'game_over' && 'Game Over - Winner: ' + 
             currentGame.players.find(p => !p.eliminated)?.name}
@@ -312,7 +334,19 @@ export function GamePage() {
         
         {/* Game phase message */}
         <div id="action-message" className={currentGame.gameState}>
-          {currentGame.gameState === 'game_over' ? (
+          {/* Show special message for eliminated players regardless of game state */}
+          {currentPlayer?.eliminated && currentGame.gameState !== 'game_over' ? (
+            <div className="player-eliminated-message">
+              <h3>You Have Been Eliminated!</h3>
+              <p>You lost all influence and are out of the game. You can still watch the game progress.</p>
+            </div>
+          ) : !currentPlayer?.cards.some(card => !card.eliminated) && currentGame.gameState !== 'game_over' ? (
+            // Catch edge cases where player has no active cards but isn't marked eliminated yet
+            <div className="player-eliminated-message">
+              <h3>You Have Been Eliminated!</h3>
+              <p>You lost all influence and are out of the game. You can still watch the game progress.</p>
+            </div>
+          ) : currentGame.gameState === 'game_over' ? (
             <div className="game-over-message">
               <h3>Game Over!</h3>
               <p>Winner: {currentGame.players.find(p => !p.eliminated)?.name}</p>
@@ -368,8 +402,13 @@ export function GamePage() {
                   
               {currentGame.gameState === 'lose_influence' && 
                 (currentGame.pendingActionFrom === playerId ? 
-                  `You need to lose influence! Select a card to lose.` : 
-                  `${currentGame.players.find(p => p.id === currentGame.pendingActionFrom)?.name} is choosing which card to lose.`)}
+                  (currentPlayer?.eliminated ? 
+                    `You have been eliminated!` : 
+                    `You need to lose influence! Select a card to lose.`) : 
+                  `${currentGame.players.find(p => p.id === currentGame.pendingActionFrom)?.name} ${
+                    currentGame.players.find(p => p.id === currentGame.pendingActionFrom)?.eliminated ? 
+                    'has been eliminated!' : 'is choosing which card to lose.'
+                  }`)}
                   
               {currentGame.gameState === 'exchange_selection' && currentGame.currentAction?.action &&
                 (currentGame.currentAction.action.playerId === playerId ? 
@@ -503,7 +542,10 @@ export function GamePage() {
         )}
         
         {/* Lose influence section */}
-        {currentGame.gameState === 'lose_influence' && currentGame.pendingActionFrom === playerId && (
+        {currentGame.gameState === 'lose_influence' && 
+         currentGame.pendingActionFrom === playerId && 
+         !currentPlayer?.eliminated && 
+         currentPlayer?.cards.some(card => !card.eliminated) && (
           <div id="lose-influence-section">
             <h3>You must lose influence! Select a card to lose:</h3>
             <div className="reveal-card-options">
@@ -529,8 +571,21 @@ export function GamePage() {
           </div>
         )}
         
+        {/* Show a message when eliminated during an action */}
+        {currentGame.gameState === 'lose_influence' && 
+         currentGame.pendingActionFrom === playerId && 
+         (!currentPlayer?.cards.some(card => !card.eliminated)) && (
+          <div id="lose-influence-section" className="eliminated-message">
+            <h3>You have been eliminated!</h3>
+            <p>You lost all influence and are out of the game.</p>
+          </div>
+        )}
+        
         {/* Card reveal for challenges */}
-        {currentGame.gameState === 'reveal_challenge' && currentGame.pendingActionFrom === playerId && (
+        {currentGame.gameState === 'reveal_challenge' && 
+         currentGame.pendingActionFrom === playerId &&
+         !currentPlayer?.eliminated &&
+         currentPlayer?.cards.some(card => !card.eliminated) && (
           <div id="reveal-card-section">
             <h3>Choose a card to reveal to respond to the challenge:</h3>
             <div className="reveal-card-options">
@@ -553,6 +608,16 @@ export function GamePage() {
                 })
               }
             </div>
+          </div>
+        )}
+        
+        {/* Show a message when eliminated during an Assassinate action while in reveal state */}
+        {currentGame.gameState === 'reveal_challenge' && 
+         currentGame.pendingActionFrom === playerId && 
+         (currentPlayer?.eliminated || !currentPlayer?.cards.some(card => !card.eliminated)) && (
+          <div id="reveal-card-section" className="eliminated-message">
+            <h3>You have been eliminated!</h3>
+            <p>You lost all influence and are out of the game.</p>
           </div>
         )}
         

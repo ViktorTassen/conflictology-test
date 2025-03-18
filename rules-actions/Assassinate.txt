@@ -1,0 +1,179 @@
+Assassinate (Assassin) Action Logic Flow
+Basic Action: Assassinate
+
+Player Action: Player announces "Assassinate" and targets another player (claiming to have the Assassin).
+Valid When: Player has 3 or more coins.
+Cost: 3 coins paid to treasury.
+Basic Effect: Target player loses one influence (card) if not blocked.
+
+
+
+Response Scenarios
+
+Scenario 1 (Assassinate success)
+
+Player A pays 3 coins, declares Assassinate, and select Player B as target.
+UI changes: Player A waits for resolving.
+UI changes: Player B see 3 options: "Challenge Assassin", “Block with Contessa”, "Allow action".
+UI changes: Player C see 2 options: "Challenge Assassin" and "Allow action".
+When player B click "Allow action," it resolves the voting immediately.
+
+Effect: Player B loses one card of his selection.
+Turn ends, next player begins.
+
+Scenario 2A 
+
+Player A pays 3 coins, declares Assassinate, and select Player B as target.
+UI changes: Player A waits for resolving.
+UI changes: Player B see 3 options: "Challenge Assassin", “Block with Contessa”, "Allow action".
+UI changes: Player C see 2 options: "Challenge Assassin" and "Allow action".
+Player B clicks "Challenge Assassin" it resolves the voting immediately.
+If Player A has Assassin card:
+Effect: Player B loses all cards immediately without any ui for choosing (one for assassination, one for lost challenge). It means player B is eliminated.
+The Assassin is revealed and then shuffled back into the deck.
+Player A draws a replacement card.
+Turn ends, next player begins.
+
+
+Scenario 2B 
+
+Player A pays 3 coins, declares Assassinate, and select Player B as target.
+UI changes: Player A waits for resolving.
+UI changes: Player B see 3 options: "Challenge Assassin", “Block with Contessa”, "Allow action".
+UI changes: Player C see 2 options: "Challenge Assassin" and "Allow action".
+Player B clicks "Challenge Assassin" it resolves the voting immediately.
+If Player A does NOT have Assassin card:
+Effect: Player A loses one influence (discards a card of their choice).
+Turn ends, next player begins.
+
+
+Scenario 3A 
+
+Player A pays 3 coins, declares Assassinate, and select Player B as target.
+UI changes: Player A waits for resolving.
+UI changes: Player B see 3 options: "Challenge Assassin", “Block with Contessa”, "Allow action".
+UI changes: Player C see 2 options: "Challenge Assassin" and "Allow action".
+Player B clicks "Block with Contessa". it resolves current voting immediately.
+UI changes: Player A see 2 options: "Challenge Contessa", “Accept block”.
+UI changes: Player C see 2 options: "Challenge Contessa", “Allow action”.
+Player A clicks “Challenge Contessa”
+If Player B has Contessa card:
+Effect: Player A loses one influence (discards a card of their choice). Assassination Blocked with Contessa successfully. it resolves voting immediately.
+The Contessa is revealed and then shuffled back into the deck.
+Player B draws a replacement card.
+Turn ends, next player begins.
+
+Scenario 3B 
+
+Player A pays 3 coins, declares Assassinate, and select Player B as target.
+UI changes: Player A waits for resolving.
+UI changes: Player B see 3 options: "Challenge Assassin", “Block with Contessa”, "Allow action".
+UI changes: Player C see 2 options: "Challenge Assassin" and "Allow action".
+Player B clicks "Block with Contessa". it resolves current voting immediately.
+UI changes: Player A see 2 options: "Challenge Contessa", “Accept block”.
+UI changes: Player C see 2 options: "Challenge Contessa", “Allow action”.
+Player A clicks “Challenge Contessa”
+If Player B does NOT have Contessa card:
+Effect: Player B loses all cards immediately without any ui for choosing (one for assassination, one for lost challenge). It means player B is eliminated.
+The Assassin is revealed and then shuffled back into the deck.
+Player A draws a replacement card.
+Turn ends, next player begins.
+
+
+
+
+Scenario 4A
+
+Player A pays 3 coins, declares Assassinate, and select Player B as target.
+UI changes: Player A waits for resolving.
+UI changes: Player B see 3 options: "Challenge Assassin", “Block with Contessa”, "Allow action".
+UI changes: Player C see 2 options: "Challenge Assassin" and "Allow action".
+Player C clicks "Challenge Assassin" it resolves the voting immediately.
+If Player A has Assassin card:
+The Assassin is revealed and then shuffled back into the deck.
+Player A draws a replacement card.
+Effect: Player C loses one influence (discards a card of their choice). 
+UI changes: Player B see 2 options: “Block with Contessa”, "Allow action".
+If Player B click “Allow action”:
+Player B loses one influence (discards a card of their choice). 
+Turn ends, next player begins.
+
+Scenario 4B
+
+Player A pays 3 coins, declares Assassinate, and select Player B as target.
+UI changes: Player A waits for resolving.
+UI changes: Player B see 3 options: "Challenge Assassin", “Block with Contessa”, "Allow action".
+UI changes: Player C see 2 options: "Challenge Assassin" and "Allow action".
+Player C clicks "Challenge Assassin" it resolves the voting immediately.
+If Player A has Assassin card:
+The Assassin is revealed and then shuffled back into the deck.
+Player A draws a replacement card.
+Effect: Player C loses one influence (discards a card of their choice). 
+UI changes: Player B see 2 options: “Block with Contessa”, "Allow action".
+If Player B click “Block with Contessa”:
+UI changes: Player A see 2 options: "Challenge Contessa", “Accept block”.
+UI changes: Player C see 2 options: "Challenge Contessa", “Allow action”.
+Player A clicks “Challenge Contessa”
+If Player B has Contessa card:
+Effect: Player A loses one influence (discards a card of their choice). Assassination Blocked with Contessa successfully. it resolves voting immediately.
+The Contessa is revealed and then shuffled back into the deck.
+Player B draws a replacement card.
+Turn ends, next player begins.
+
+
+
+Scenario 4C
+
+Player A pays 3 coins, declares Assassinate, and select Player B as target.
+UI changes: Player A waits for resolving.
+UI changes: Player B see 3 options: "Challenge Assassin", “Block with Contessa”, "Allow action".
+UI changes: Player C see 2 options: "Challenge Assassin" and "Allow action".
+Player C clicks "Challenge Assassin" it resolves the voting immediately.
+If Player A has Assassin card:
+The Assassin is revealed and then shuffled back into the deck.
+Player A draws a replacement card.
+Effect: Player C loses one influence (discards a card of their choice). 
+UI changes: Player B see 2 options: “Block with Contessa”, "Allow action".
+If Player B click “Block with Contessa”:
+UI changes: Player A see 2 options: "Challenge Contessa", “Accept block”.
+UI changes: Player C see 2 options: "Challenge Contessa", “Allow action”.
+Player A clicks “Challenge Contessa”
+If Player B does NOT have Contessa card:
+Effect: Player B loses all cards immediately without any ui for choosing (one for assassination, one for lost challenge). It means player B is eliminated.
+Turn ends, next player begins.
+
+
+Scenario 4D
+
+Player A pays 3 coins, declares Assassinate, and select Player B as target.
+UI changes: Player A waits for resolving.
+UI changes: Player B see 3 options: "Challenge Assassin", “Block with Contessa”, "Allow action".
+UI changes: Player C see 2 options: "Challenge Assassin" and "Allow action".
+Player C clicks "Challenge Assassin" it resolves the voting immediately.
+If Player A has Assassin card:
+The Assassin is revealed and then shuffled back into the deck.
+Player A draws a replacement card.
+Effect: Player C loses one influence (discards a card of their choice). 
+UI changes: Player B see 2 options: “Block with Contessa”, "Allow action".
+If Player B click “Block with Contessa”:
+UI changes: Player A see 2 options: "Challenge Contessa", “Accept block”.
+UI changes: Player C see 2 options: "Challenge Contessa", “Allow action”.
+Player A clicks “Accept block”, it resolves the voting immediately.
+
+Turn ends, next player begins.
+
+
+
+Scenario 4E
+
+Player A pays 3 coins, declares Assassinate, and select Player B as target.
+UI changes: Player A waits for resolving.
+UI changes: Player B see 3 options: "Challenge Assassin", “Block with Contessa”, "Allow action".
+UI changes: Player C see 2 options: "Challenge Assassin" and "Allow action".
+Player C clicks "Challenge Assassin" it resolves the voting immediately.
+If Player A does NOT have Assassin card:
+Effect: Player A loses one influence (discards a card of their choice). Assassination stopped.
+Turn ends, next player begins.
+
+
+

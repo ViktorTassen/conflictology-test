@@ -15,12 +15,17 @@ import { FirebaseGameRepository } from '@/infrastructure/repositories/FirebaseGa
 const gameRepository = new FirebaseGameRepository();
 export const gameService = new GameService(gameRepository);
 
-// Re-export the subscribeToGame function for convenience
+// Re-export the game state functions for convenience
 export const subscribeToGame = (
   gameId: string, 
   callback: (game: Game) => void
 ): (() => void) => {
   return gameService.subscribeToGame(gameId, callback);
+};
+
+// Get current game state (useful for refreshing when UI is stuck)
+export const getCurrentState = async (gameId: string): Promise<Game> => {
+  return gameService.getCurrentState(gameId);
 };
 
 // Utility exports for convenience:

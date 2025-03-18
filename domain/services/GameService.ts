@@ -261,6 +261,13 @@ export class GameService implements IGameService {
             game.players[game.currentPlayerIndex].id === playerId) {
           this.advanceToNextPlayer(game);
         }
+        
+        // If this player was waiting for an action in any game state,
+        // also automatically advance the game state
+        if (game.pendingActionFrom === playerId) {
+          await this.addGameLog(gameId, `${player.name} left during their action. Game state automatically advanced.`);
+          this.advanceToNextPlayer(game);
+        }
       }
       
       await this.repository.updateGame(game);
@@ -274,6 +281,28 @@ export class GameService implements IGameService {
   async getCurrentState(gameId: string): Promise<Game> {
     const game = await this.repository.getGame(gameId);
     if (!game) throw new Error('Game not found');
+    
+    // Auto-fix: Check if game is in a stuck state with an eliminated player
+    // This provides a clean server-side fix for the UI issue
+    if (game.gameState === 'lose_influence' && 
+        game.pendingActionFrom && 
+        game.players.find(p => p.id === game.pendingActionFrom)?.eliminated) {
+      
+      console.log(`Auto-fixing game state: ${game.id} - Eliminated player in pendingActionFrom`);
+      
+      // Log the action
+      game.logs.push(this.createLog(`Game state automatically advanced from stuck state with eliminated player.`));
+      
+      // Clear the stuck state and advance to the next player
+      this.advanceToNextPlayer(game);
+      
+      // Save the fixed state
+      await this.repository.updateGame(game);
+      
+      // Return the fixed game state
+      return game;
+    }
+    
     return game;
   }
 
@@ -342,8 +371,19 @@ export class GameService implements IGameService {
         game.gameState = 'action_response';
         game.currentAction = newAction;
         
-        // Log the action
-        if (actionRequest.target) {
+        // Pay costs for actions that require coins
+        if (actionRequest.type === 'assassinate') {
+          // Deduct 3 coins for Assassinate
+          player.coins -= actionProps.cost;
+          
+          const targetPlayer = game.players.find(p => p.id === actionRequest.target);
+          await this.addGameLog(
+            gameId, 
+            `${player.name} paid ${actionProps.cost} coins and attempted to assassinate ${targetPlayer?.name || 'unknown'}`
+          );
+        } 
+        // Log other actions
+        else if (actionRequest.target) {
           const targetPlayer = game.players.find(p => p.id === actionRequest.target);
           await this.addGameLog(
             gameId, 
@@ -453,11 +493,17 @@ export class GameService implements IGameService {
         if (revealedCard.character === blockCharacter) {
           // Block successful, challenger loses influence
           
-          // Special log message for Foreign Aid
+          // Special log message for different action types
           if (actionType === 'foreign_aid' && blockCharacter === 'Duke') {
             await this.addGameLog(
               gameId, 
               `${player.name} revealed Duke to prove the block. The Foreign Aid is blocked.`
+            );
+          } else if (actionType === 'assassinate' && blockCharacter === 'Contessa') {
+            // Scenario 3A - Contessa block is successful
+            await this.addGameLog(
+              gameId, 
+              `${player.name} revealed Contessa to prove the block. The assassination is blocked.`
             );
           } else {
             await this.addGameLog(
@@ -473,11 +519,17 @@ export class GameService implements IGameService {
           game.gameState = 'lose_influence';
           game.pendingActionFrom = challengerId;
           
-          // Specific message for Foreign Aid Duke challenges
+          // Specific message for different action types
           if (actionType === 'foreign_aid' && blockCharacter === 'Duke') {
             await this.addGameLog(
               gameId, 
               `${challenger.name} must lose an influence for the failed challenge against ${player.name}'s Duke.`
+            );
+          } else if (actionType === 'assassinate' && blockCharacter === 'Contessa') {
+            // Scenario 3A - Challenger must lose influence
+            await this.addGameLog(
+              gameId, 
+              `${challenger.name} must lose an influence for the failed challenge against ${player.name}'s Contessa.`
             );
           } else {
             await this.addGameLog(
@@ -488,12 +540,62 @@ export class GameService implements IGameService {
         } else {
           // Block failed, blocker loses influence and action resolves
           
-          // Special handling for Foreign Aid
+          // Special handling for different action types
           if (actionType === 'foreign_aid' && blockCharacter === 'Duke') {
             await this.addGameLog(
               gameId, 
               `${player.name} revealed ${revealedCard.character} which is not Duke. The block fails.`
             );
+          } else if (actionType === 'assassinate' && blockCharacter === 'Contessa') {
+            // Scenario 3B - Contessa block fails, target loses both cards immediately
+            await this.addGameLog(
+              gameId, 
+              `${player.name} revealed ${revealedCard.character} which is not Contessa. The block fails and the assassination succeeds.`
+            );
+            
+            // Special handling for failed Contessa block
+            // Player immediately loses both influences (one for failed block, one for assassination)
+            player.cards.forEach(card => card.eliminated = true);
+            
+            // Mark player as eliminated directly without using checkPlayerElimination
+            player.eliminated = true;
+            
+            // Set pendingActionFrom to null to avoid UI confusion
+            game.pendingActionFrom = undefined;
+            
+            // Add clear log message
+            game.logs.push(this.createLog(`${player.name} has been eliminated from the game!`));
+            
+            // Check if the game is over
+            if (this.rules.isGameOver(game)) {
+              const winner = this.rules.getWinner(game);
+              if (winner) {
+                game.gameState = 'game_over';
+                game.logs.push(this.createLog(`${winner.name} has won the game!`));
+                await this.repository.updateGame(game);
+                return;
+              }
+            }
+            
+            // Clear the current action and set appropriate game state
+            game.currentAction = undefined;
+            game.pendingActionFrom = undefined;
+            game.gameState = 'play';
+            
+            // Log the advancement to the next player
+            game.logs.push(this.createLog(`Game advancing to the next player after ${player.name}'s elimination.`));
+            
+            // Explicitly find the next player index to avoid any state issues
+            let nextPlayerIndex = game.currentPlayerIndex;
+            do {
+              nextPlayerIndex = (nextPlayerIndex + 1) % game.players.length;
+            } while (game.players[nextPlayerIndex].eliminated);
+            
+            // Set the current player index to the next player
+            game.currentPlayerIndex = nextPlayerIndex;
+            
+            await this.repository.updateGame(game);
+            return;
           } else {
             await this.addGameLog(
               gameId, 
@@ -501,26 +603,29 @@ export class GameService implements IGameService {
             );
           }
           
-          // Blocker loses this card
-          player.cards[cardIndex].eliminated = true;
-          
-          // Check if player is eliminated
-          this.checkPlayerElimination(game, player);
-          
-          // For Foreign Aid, execute the original action with a specific message
-          if (actionType === 'foreign_aid') {
-            const actionPlayer = game.players.find(p => p.id === game.currentAction!.action.playerId);
-            if (actionPlayer) {
-              actionPlayer.coins += 2;
-              await this.addGameLog(
-                gameId, 
-                `${actionPlayer.name} successfully took foreign aid (+2 coins).`
-              );
+          // Special handling for action types other than Assassinate (already handled above)
+          if (actionType !== 'assassinate') {
+            // Blocker loses this card
+            player.cards[cardIndex].eliminated = true;
+            
+            // Check if player is eliminated
+            this.checkPlayerElimination(game, player);
+            
+            // For Foreign Aid, execute the original action with a specific message
+            if (actionType === 'foreign_aid') {
+              const actionPlayer = game.players.find(p => p.id === game.currentAction!.action.playerId);
+              if (actionPlayer) {
+                actionPlayer.coins += 2;
+                await this.addGameLog(
+                  gameId, 
+                  `${actionPlayer.name} successfully took foreign aid (+2 coins).`
+                );
+              }
+              this.advanceToNextPlayer(game);
+            } else {
+              // Execute the original action for other action types
+              await this.resolveAction(game);
             }
-            this.advanceToNextPlayer(game);
-          } else {
-            // Execute the original action for other action types
-            await this.resolveAction(game);
           }
         }
       } 
@@ -533,11 +638,17 @@ export class GameService implements IGameService {
         if (requiredCharacter && revealedCard.character === requiredCharacter) {
           // Challenge failed, challenger loses influence
           
-          // Special handling for Exchange action
+          // Special handling for different action types
           if (actionType === 'exchange') {
             await this.addGameLog(
               gameId, 
               `${player.name} revealed Ambassador to prove the claim. The Exchange action continues.`
+            );
+          } else if (actionType === 'assassinate') {
+            // Scenario 2A and 4A
+            await this.addGameLog(
+              gameId, 
+              `${player.name} revealed Assassin to prove the claim. The assassination will proceed.`
             );
           } else {
             await this.addGameLog(
@@ -549,15 +660,38 @@ export class GameService implements IGameService {
           // Replace the card
           this.replacePlayerCard(game, player, cardIndex);
           
+          // Special handling for Assassinate when target challenged the Assassin
+          // Scenario 2A - target challenged, will automatically lose both influences
+          const target = game.currentAction.action.target;
+          if (actionType === 'assassinate' && challengerId === target) {
+            // Mark the challenge as special case for Assassinate where target loses both influences
+            game.currentAction.challenge.specialAssassinCase = true;
+          }
+          
           // Challenger loses influence
           game.gameState = 'lose_influence';
           game.pendingActionFrom = challengerId;
           
+          // Special messages for different action types
           if (actionType === 'exchange') {
             await this.addGameLog(
               gameId, 
               `${challenger.name} must lose an influence for the failed challenge against ${player.name}'s Ambassador.`
             );
+          } else if (actionType === 'assassinate') {
+            // Scenario 2A 
+            await this.addGameLog(
+              gameId, 
+              `${challenger.name} must lose an influence for the failed challenge against ${player.name}'s Assassin.`
+            );
+            
+            // If the challenger is the target, warn about automatic elimination
+            if (challengerId === target) {
+              await this.addGameLog(
+                gameId, 
+                `Since ${challenger.name} is the target of the assassination, they will lose all influence.`
+              );
+            }
           } else {
             await this.addGameLog(
               gameId, 
@@ -570,12 +704,22 @@ export class GameService implements IGameService {
         } else {
           // Challenge successful, action player loses influence and action fails
           
-          // Special handling for Exchange action
+          // Special handling for different action types
           if (actionType === 'exchange') {
             await this.addGameLog(
               gameId, 
               `${player.name} revealed ${revealedCard.character} which is not Ambassador. The Exchange action fails.`
             );
+          } else if (actionType === 'assassinate') {
+            // Scenario 2B and 4E
+            await this.addGameLog(
+              gameId, 
+              `${player.name} revealed ${revealedCard.character} which is not Assassin. The assassination fails.`
+            );
+            
+            // If player paid 3 coins for the Assassinate, they should lose those coins
+            // (In the original action, they paid 3 coins to use Assassinate)
+            // No need to refund, as coins were already deducted in performAction
           } else {
             await this.addGameLog(
               gameId, 
@@ -624,6 +768,44 @@ export class GameService implements IGameService {
     const player = game.players.find(p => p.id === playerId);
     if (!player) throw new Error('Player not found');
     
+    // Special Assassinate Scenario 2A handling
+    // If this player challenged an Assassin, lost the challenge, and was the target
+    if (game.currentAction?.challenge?.specialAssassinCase && 
+        game.currentAction.challenge.challengerId === playerId &&
+        game.currentAction.action.type === 'assassinate' &&
+        game.currentAction.action.target === playerId) {
+      
+      // Mark all cards as eliminated (both influences lost at once)
+      player.cards.forEach(card => card.eliminated = true);
+      
+      await this.addGameLog(
+        gameId, 
+        `${player.name} lost all influence (one for the failed challenge and one for the assassination).`
+      );
+      
+      // Mark player as eliminated directly without calling checkPlayerElimination
+      // This avoids calling advanceToNextPlayer twice
+      player.eliminated = true;
+      game.logs.push(this.createLog(`${player.name} has been eliminated from the game!`));
+      
+      // Check if the game is over
+      if (this.rules.isGameOver(game)) {
+        const winner = this.rules.getWinner(game);
+        if (winner) {
+          game.gameState = 'game_over';
+          await this.addGameLog(gameId, `${winner.name} has won the game!`);
+        }
+        await this.repository.updateGame(game);
+        return;
+      }
+      
+      // Move to next player's turn
+      this.advanceToNextPlayer(game);
+      await this.repository.updateGame(game);
+      return;
+    }
+    
+    // Standard influence loss handling (non-special case)
     if (cardIndex < 0 || cardIndex >= player.cards.length || player.cards[cardIndex].eliminated) {
       throw new Error('Invalid card index');
     }
@@ -638,10 +820,38 @@ export class GameService implements IGameService {
       `${player.name} lost influence and revealed ${lostCard.character}.`
     );
     
-    // Check if player is eliminated
-    this.checkPlayerElimination(game, player);
+    // Check if the player is now eliminated, but don't use checkPlayerElimination yet
+    // This avoids potential double advancement issues
+    const isPlayerEliminated = player.cards.every(card => card.eliminated);
+    if (isPlayerEliminated) {
+      player.eliminated = true;
+      game.logs.push(this.createLog(`${player.name} has been eliminated from the game!`));
+      
+      // Clear pendingActionFrom immediately - this is critical to avoid UI confusion
+      // with multiple elimination messages
+      game.pendingActionFrom = undefined;
+      
+      // Check if the game is over
+      if (this.rules.isGameOver(game)) {
+        const winner = this.rules.getWinner(game);
+        if (winner) {
+          game.gameState = 'game_over';
+          await this.addGameLog(gameId, `${winner.name} has won the game!`);
+        }
+        await this.repository.updateGame(game);
+        return;
+      }
+      
+      // When a player is eliminated, we know it's their turn to be over
+      // Advance to next player immediately and return - this prevents
+      // further state transition issues
+      this.advanceToNextPlayer(game);
+      await this.repository.updateGame(game);
+      return;
+    }
     
-    // Check if the game is over
+    // If we're still here, the player lost a card but wasn't eliminated
+    // Check if the game is over (just in case)
     if (this.rules.isGameOver(game)) {
       const winner = this.rules.getWinner(game);
       if (winner) {
@@ -674,7 +884,18 @@ export class GameService implements IGameService {
               );
             }
             this.advanceToNextPlayer(game);
-          } else {
+          } 
+          // Special handling for Assassinate block challenge (Scenario 3B)
+          else if (game.currentAction.action.type === 'assassinate' && 
+                   game.currentAction.block?.character === 'Contessa') {
+            // Assassinate proceeds after the Contessa block fails
+            await this.addGameLog(
+              gameId, 
+              `With the Contessa block failed, the assassination now proceeds.`
+            );
+            await this.resolveAction(game);
+          }
+          else {
             // For other block challenges
             await this.addGameLog(
               gameId, 
@@ -701,15 +922,42 @@ export class GameService implements IGameService {
           );
           this.advanceToNextPlayer(game);
         } else {
-          // Special handling for Exchange action after a failed challenge
+          // Special handling for different action types
           if (game.currentAction.action.type === 'exchange') {
             await this.addGameLog(
               gameId, 
               `${game.players.find(p => p.id === game.currentAction?.action.playerId)?.name} continues with the Exchange action.`
             );
             await this.resolveAction(game);
+          } 
+          // Special handling for Assassinate (Scenario 4A, 4B, 4C, 4D)
+          else if (game.currentAction.action.type === 'assassinate') {
+            // Challenger lost influence, now the target can choose to block
+            const actionPlayer = game.players.find(p => p.id === game.currentAction.action.playerId);
+            const target = game.players.find(p => p.id === game.currentAction.action.target);
+            
+            if (playerId !== game.currentAction.action.target) {
+              // If a third party was the challenger, continue with the assassination
+              // Now target can choose to block with Contessa or allow (Scenario 4A)
+              await this.addGameLog(
+                gameId, 
+                `${actionPlayer?.name}'s Assassin claim was proven. ${target?.name} may now block with Contessa or allow the assassination.`
+              );
+              
+              // Reset game state to action_response to allow target to block
+              game.gameState = 'action_response';
+              // Clear previous responses
+              game.currentAction.responses = [];
+              // Set isResolved to false, we are continuing the action
+              game.currentAction.isResolved = false;
+              // Clear the challenge record since challenge is resolved
+              game.currentAction.challenge = undefined;
+            } else {
+              // Action succeeds after failed challenge
+              await this.resolveAction(game);
+            }
           } else {
-            // Action succeeds after failed challenge
+            // Action succeeds after failed challenge for other action types
             await this.resolveAction(game);
           }
         }
@@ -883,19 +1131,39 @@ export class GameService implements IGameService {
   }
   
   private advanceToNextPlayer(game: Game): void {
+    // Store original player index before advancement
+    const originalPlayerIndex = game.currentPlayerIndex;
+    
     // Clear current action state
     game.currentAction = undefined;
     game.pendingActionFrom = undefined;
     game.gameState = 'play';
     
-    // Move to next player
+    // Move to next player - starting from the player AFTER the current player
+    // This ensures the current player doesn't go twice, even after eliminating someone
     do {
       game.currentPlayerIndex = (game.currentPlayerIndex + 1) % game.players.length;
     } while (game.players[game.currentPlayerIndex].eliminated);
+    
+    // If we ended up with the same player (possible in a 2-player game where one player is eliminated),
+    // log a message for clarity
+    if (game.currentPlayerIndex === originalPlayerIndex) {
+      game.logs.push(this.createLog(`${game.players[game.currentPlayerIndex].name} has another turn (only active player).`));
+    }
   }
   
   private checkPlayerElimination(game: Game, player: Player): void {
     if (player.cards.every(card => card.eliminated)) {
+      // First, check if player is already marked as eliminated to avoid duplicate actions
+      if (player.eliminated) {
+        // Player is already eliminated - just make sure pendingActionFrom is cleared
+        if (game.pendingActionFrom === player.id) {
+          game.pendingActionFrom = undefined;
+        }
+        return;
+      }
+      
+      // Mark the player as eliminated
       player.eliminated = true;
       game.logs.push(this.createLog(`${player.name} has been eliminated from the game!`));
       
@@ -905,6 +1173,29 @@ export class GameService implements IGameService {
         const winner = remainingPlayers[0];
         game.gameState = 'game_over';
         game.logs.push(this.createLog(`${winner.name} is the last player standing and wins the game!`));
+        return;
+      }
+      
+      // Immediate cleanup - always clear pendingActionFrom if this player was pending
+      if (game.pendingActionFrom === player.id) {
+        // Clear pendingActionFrom immediately to avoid UI confusion
+        game.pendingActionFrom = undefined;
+        
+        // Player is eliminated but was supposed to do something
+        if (['lose_influence', 'reveal_challenge', 'action_response', 'block_response', 'exchange_selection'].includes(game.gameState)) {
+          // Log the automatic advancement
+          game.logs.push(this.createLog(`${player.name} is eliminated and cannot act. Game state automatically advanced.`));
+          
+          // Automatically advance to the next player if the player who needs to act is eliminated
+          this.advanceToNextPlayer(game);
+        }
+      } 
+      // If this player is the current player, advance to next
+      // But ONLY if the game is in 'play' state to avoid double advancement in other states
+      else if (game.players[game.currentPlayerIndex]?.id === player.id && game.gameState === 'play') {
+        // Log the automatic advancement
+        game.logs.push(this.createLog(`Current player ${player.name} is eliminated. Moving to next player.`));
+        this.advanceToNextPlayer(game);
       }
     }
   }
@@ -1022,11 +1313,18 @@ export class GameService implements IGameService {
       r.type === 'block' || r.playerId === player.id
     );
     
-    // Special handling for Foreign Aid blocks with Duke
+    // Special handling for action-specific blocks
     if (game.currentAction!.action.type === 'foreign_aid' && character === 'Duke') {
       await this.addGameLog(
         game.id, 
         `${player.name} blocked Foreign Aid with Duke.`
+      );
+    } else if (game.currentAction!.action.type === 'assassinate' && character === 'Contessa') {
+      // Special message for blocking Assassinate with Contessa (Scenario 3A)
+      const actionPlayer = game.players.find(p => p.id === game.currentAction!.action.playerId);
+      await this.addGameLog(
+        game.id, 
+        `${player.name} blocked ${actionPlayer?.name || 'unknown'}'s assassination with Contessa.`
       );
     } else {
       await this.addGameLog(
@@ -1084,6 +1382,20 @@ export class GameService implements IGameService {
         game.id, 
         `${player.name} challenged ${challenged?.name || 'unknown'}'s claim to have Ambassador.`
       );
+    } else if (!isBlockChallenge && game.currentAction!.action.type === 'assassinate') {
+      // Specific text for Assassinate challenges
+      const challenged = game.players.find(p => p.id === challengedId);
+      await this.addGameLog(
+        game.id, 
+        `${player.name} challenged ${challenged?.name || 'unknown'}'s claim to have Assassin.`
+      );
+    } else if (isBlockChallenge && game.currentAction!.action.type === 'assassinate' && game.currentAction!.block?.character === 'Contessa') {
+      // Specific text for Contessa block challenges to Assassinate
+      const challenged = game.players.find(p => p.id === challengedId);
+      await this.addGameLog(
+        game.id, 
+        `${player.name} challenged ${challenged?.name || 'unknown'}'s claim to have Contessa.`
+      );
     } else {
       const challenged = game.players.find(p => p.id === challengedId);
       await this.addGameLog(
@@ -1096,6 +1408,32 @@ export class GameService implements IGameService {
     const challengedPlayer = game.players.find(p => p.id === challengedId);
     
     if (challengedPlayer && requiredCharacter) {
+      // Check if the challenged player is already eliminated
+      if (challengedPlayer.eliminated) {
+        await this.addGameLog(
+          game.id, 
+          `${challengedPlayer.name} is already eliminated and cannot respond to the challenge.`
+        );
+        
+        // Unable to challenge an eliminated player, so the challenge fails
+        // The challenger should lose influence
+        const challenger = game.players.find(p => p.id === player.id);
+        if (challenger) {
+          await this.addGameLog(
+            game.id,
+            `${challenger.name}'s challenge against an eliminated player fails. ${challenger.name} must lose influence.`
+          );
+          
+          // Set up for the challenger to lose influence
+          game.gameState = 'lose_influence';
+          game.pendingActionFrom = player.id;
+        } else {
+          // Something went wrong, just advance to next player
+          this.advanceToNextPlayer(game);
+        }
+        return;
+      }
+      
       const hasRequiredCard = this.playerHasRequiredCharacter(game, challengedId, requiredCharacter);
       
       if (!hasRequiredCard) {
@@ -1134,11 +1472,19 @@ export class GameService implements IGameService {
         // Update game state for player to reveal a card
         game.gameState = 'reveal_challenge';
         game.pendingActionFrom = challengedId;
+        
+        // Make sure to check if the game state needs to advance if player is eliminated
+        this.checkPlayerElimination(game, challengedPlayer);
       }
     } else {
       // Default to reveal state if we can't determine the required character
       game.gameState = 'reveal_challenge';
       game.pendingActionFrom = challengedId;
+      
+      // Also check if we need to advance due to player elimination
+      if (challengedPlayer) {
+        this.checkPlayerElimination(game, challengedPlayer);
+      }
     }
   }
   
@@ -1356,7 +1702,51 @@ export class GameService implements IGameService {
           throw new Error('Target player not found');
         }
         
-        // Set up for target to lose influence
+        // Check if this was a successful assassination after challenges
+        // Following scenario 2A from Assassinate.txt where a player challenged and lost
+        if (game.currentAction.challenge) {
+          // If there was a challenge to the Assassin claim that failed (challenger lost)
+          // we need to check if the target should lose one or two influences
+          const { challengerId, challengedId, isBlockChallenge } = game.currentAction.challenge;
+          
+          // Only handle special case if this wasn't a block challenge
+          if (!isBlockChallenge) {
+            // If the target was the challenger who lost a challenge to an Assassin
+            // they should lose both influences at once - scenario 2A
+            if (challengerId === assassinateTarget.id) {
+              // Target loses all influence - no UI choice needed
+              // Mark all cards as eliminated
+              assassinateTarget.cards.forEach(card => card.eliminated = true);
+              
+              await this.addGameLog(
+                game.id, 
+                `${assassinateTarget.name} lost all influence (one for losing the challenge and one for the assassination).`
+              );
+              
+              // Mark player as eliminated directly without calling checkPlayerElimination
+              // This avoids double advancement issues
+              assassinateTarget.eliminated = true;
+              game.logs.push(this.createLog(`${assassinateTarget.name} has been eliminated from the game!`));
+              
+              // Check if the game is over
+              if (this.rules.isGameOver(game)) {
+                const winner = this.rules.getWinner(game);
+                if (winner) {
+                  game.gameState = 'game_over';
+                  game.logs.push(this.createLog(`${winner.name} has won the game!`));
+                  return;
+                }
+              }
+              
+              // Move to the next player - no need for lose_influence state
+              this.advanceToNextPlayer(game);
+              return;
+            }
+          }
+        }
+        
+        // Standard assassination (no special challenge case)
+        // Set up for target to lose influence - scenario 1
         game.gameState = 'lose_influence';
         game.pendingActionFrom = assassinateTarget.id;
         

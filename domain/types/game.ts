@@ -65,6 +65,7 @@ export interface GameAction {
     challengedId: PlayerID;
     isBlockChallenge: boolean;
     isResolved?: boolean; // Set to true if challenge was auto-resolved (player had no card)
+    specialAssassinCase?: boolean; // Set to true for Scenario 2A in Assassinate.txt (target challenged Assassin and lost)
   };
   
   block?: {
