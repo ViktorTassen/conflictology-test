@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Game } from '@/domain/types/game';
 import { useGameStore } from '@/store/gameStore';
 import { TargetSelection } from '@/components/TargetSelection';
+import CardReveal from '@/components/CardReveal';
 import './style.css';
 
 // Get URL query parameters
@@ -23,26 +24,45 @@ export function GamePage() {
     performAction,
     blockAction,
     challengeAction,
-    revealCard
+    revealCard,
+    completeExchange
   } = useGameStore();
   
   // State for target selection
   const [showTargetSelection, setShowTargetSelection] = useState(false);
   const [currentActionType, setCurrentActionType] = useState<string>('');
 
-  // Subscribe to game updates
+  // Subscribe to game updates and register player info
   useEffect(() => {
     if (!gameId) {
+      console.error('No gameId available');
       return;
     }
 
-    if (playerId === null) {
-      return;
-    }
-
+    console.log(`Initializing game with ID: ${gameId}`);
+    
+    // First subscribe to the game to get initial state
     const unsubscribe = subscribeToGame(gameId);
-    return () => unsubscribe();
-  }, [gameId, playerId, subscribeToGame]);
+    
+    // Set game info in the store once when we have both gameId and playerId
+    // This is separated in its own useEffect to prevent loops
+    
+    return () => {
+      console.log('Unsubscribing from game updates');
+      unsubscribe();
+    };
+  }, [gameId, subscribeToGame]);
+  
+  // Set player info in store separately to avoid re-subscriptions
+  useEffect(() => {
+    if (playerId && gameId && currentGame?.players) {
+      const playerName = currentGame.players.find(p => p.id === playerId)?.name || '';
+      if (playerName) {
+        console.log(`Setting game info in store: gameId=${gameId}, playerId=${playerId}, name=${playerName}`);
+        useGameStore.getState().setGameInfo(gameId, playerId, playerName);
+      }
+    }
+  }, [gameId, playerId, currentGame?.id]);
 
   if (loading) {
     return (
@@ -89,19 +109,32 @@ export function GamePage() {
     setShowTargetSelection(false);
   };
   
-  // Handle game actions
-  const handleAction = async (actionType: string, targetId?: string) => {
+  // Handle exchange card selection
+  const handleCompleteExchange = async (selectedIndices: number[]) => {
     if (!gameId || !playerId) return;
     
     try {
+      console.log(`Completing exchange with selected indices: ${selectedIndices.join(', ')}`);
+      // Use the new selectExchangeCards function
+      await useGameStore.getState().selectExchangeCards(selectedIndices);
+      console.log('Exchange completed successfully');
+    } catch (error) {
+      console.error('Failed to complete exchange:', error);
+    }
+  };
+  
+  const handleCancelExchange = () => {
+    // Can't actually cancel, so just a no-op
+    console.log('Cannot cancel exchange');
+  };
+  
+  // Handle game actions
+  const handleAction = async (actionType: string, targetId?: string) => {
+    try {
       console.log(`Performing action: ${actionType}`, targetId ? `with target: ${targetId}` : '');
       
-      // Actually perform the action using the gameService
-      await performAction(gameId, {
-        type: actionType,
-        playerId,
-        target: targetId
-      });
+      // Use the updated performAction from store
+      await useGameStore.getState().performAction(actionType as any, targetId);
       
       console.log('Action performed successfully');
     } catch (error) {
@@ -111,11 +144,10 @@ export function GamePage() {
   
   // Handle blocking an action
   const handleBlock = async (character: string) => {
-    if (!gameId || !playerId || !currentGame.currentAction) return;
-    
     try {
       console.log(`Blocking with ${character}`);
-      await blockAction(gameId, playerId, character as any);
+      // Use respondToAction instead of the old blockAction
+      await useGameStore.getState().respondToAction('block', character as any);
       console.log('Block performed successfully');
     } catch (error) {
       console.error('Failed to block action:', error);
@@ -124,11 +156,10 @@ export function GamePage() {
   
   // Handle challenging an action
   const handleChallenge = async () => {
-    if (!gameId || !playerId || !currentGame.currentAction) return;
-    
     try {
       console.log('Challenging action');
-      await challengeAction(gameId, playerId);
+      // Use respondToAction instead of the old challengeAction
+      await useGameStore.getState().respondToAction('challenge');
       console.log('Challenge performed successfully');
     } catch (error) {
       console.error('Failed to challenge action:', error);
@@ -137,28 +168,60 @@ export function GamePage() {
   
   // Handle revealing a card (for challenges)
   const handleRevealCard = async (cardIndex: number) => {
-    if (!gameId || !playerId) return;
+    if (!gameId || !playerId) {
+      console.error('Missing gameId or playerId for revealCard', { gameId, playerId });
+      return;
+    }
     
     try {
       console.log(`Revealing card ${cardIndex}`);
-      await revealCard(gameId, playerId, cardIndex);
+      // Use the updated function with all parameters
+      await useGameStore.getState().revealCard(cardIndex);
       console.log('Card revealed successfully');
     } catch (error) {
       console.error('Failed to reveal card:', error);
     }
   };
   
-  // Handle accepting a block (no need to reveal card)
-  const handleAcceptBlock = async () => {
-    if (!gameId || !playerId || !currentGame.currentAction) return;
+  // Handle losing influence
+  const handleLoseInfluence = async (cardIndex: number) => {
+    if (!gameId || !playerId) {
+      console.error('Missing gameId or playerId for loseInfluence', { gameId, playerId });
+      return;
+    }
     
     try {
+      console.log(`Losing influence card ${cardIndex}`);
+      // Use the new loseInfluence function
+      await useGameStore.getState().loseInfluence(cardIndex);
+      console.log('Influence lost successfully');
+    } catch (error) {
+      console.error('Failed to lose influence:', error);
+    }
+  };
+  
+  // Handle accepting a block (no need to reveal card)
+  const handleAcceptBlock = async () => {
+    try {
       console.log('Accepting block');
-      // Use accept_block action to handle accepting block
-      await performAction(gameId, {
-        type: 'accept_block',
-        playerId
-      });
+      // Get store reference
+      const store = useGameStore.getState();
+      
+      // Check if game info is properly set
+      if (!store.gameId || !store.playerId) {
+        console.log('Game info missing in store, setting it now');
+        // Set it again as a safeguard if it's missing
+        if (gameId && playerId) {
+          const playerName = currentGame?.players.find(p => p.id === playerId)?.name || '';
+          store.setGameInfo(gameId, playerId, playerName);
+        } else {
+          console.error('Cannot accept block: gameId or playerId is missing', { gameId, playerId });
+          return;
+        }
+      }
+      
+      // Use respondToAction with 'pass'
+      await store.respondToAction('pass');
       console.log('Block accepted successfully');
     } catch (error) {
       console.error('Failed to accept block:', error);
@@ -167,15 +230,10 @@ export function GamePage() {
   
   // Handle challenging a block
   const handleChallengeBlock = async () => {
-    if (!gameId || !playerId || !currentGame.currentAction) return;
-    
     try {
       console.log('Challenging block');
-      // Use challenge_block action to handle challenging the block
-      await performAction(gameId, {
-        type: 'challenge_block',
-        playerId
-      });
+      // Use respondToAction with 'challenge'
+      await useGameStore.getState().respondToAction('challenge');
       console.log('Block challenged successfully');
     } catch (error) {
       console.error('Failed to challenge block:', error);
@@ -184,15 +242,25 @@ export function GamePage() {
   
   // Handle passing (allowing action)
   const handlePass = async () => {
-    if (!gameId || !playerId || !currentGame.currentAction) return;
-    
     try {
       console.log('Passing - allowing action');
-      // For pass, we use a special action type 'pass'
-      await performAction(gameId, {
-        type: 'pass',
-        playerId
-      });
+      // Make sure gameId and playerId are properly set in the store first
+      // Check if the store already has the game info
+      const store = useGameStore.getState();
+      if (!store.gameId || !store.playerId) {
+        console.log('Game info missing in store, setting it now');
+        // Set it again as a safeguard if it's missing
+        if (gameId && playerId) {
+          const playerName = currentGame?.players.find(p => p.id === playerId)?.name || '';
+          store.setGameInfo(gameId, playerId, playerName);
+        } else {
+          console.error('Cannot pass: gameId or playerId is missing', { gameId, playerId });
+          return;
+        }
+      }
+      
+      // Use respondToAction with 'pass'
+      await store.respondToAction('pass');
       console.log('Passed successfully');
     } catch (error) {
       console.error('Failed to pass:', error);
@@ -206,7 +274,13 @@ export function GamePage() {
         <div id="game-state">
           {currentGame.gameState === 'setup' && 'Game Setup'}
           {currentGame.gameState === 'play' && `${currentGame.players[currentGame.currentPlayerIndex]?.name}'s turn`}
-          {currentGame.gameState === 'gameover' && 'Game Over'}
+          {currentGame.gameState === 'action_response' && 'Waiting for players to respond to action'}
+          {currentGame.gameState === 'block_response' && 'Waiting for response to block'}
+          {currentGame.gameState === 'reveal_challenge' && 'Waiting for player to reveal card'}
+          {currentGame.gameState === 'lose_influence' && 'Waiting for player to lose influence'}
+          {currentGame.gameState === 'exchange_selection' && 'Waiting for player to select cards'}
+          {currentGame.gameState === 'game_over' && 'Game Over - Winner: ' + 
+            currentGame.players.find(p => !p.eliminated)?.name}
         </div>
       </div>
       
@@ -222,31 +296,71 @@ export function GamePage() {
         
         {/* Game phase message */}
         <div id="action-message" className={currentGame.gameState}>
-          {currentGame.gameState === 'play' && isCurrentTurn && 
-            "It's your turn! Select an action below:"}
-            
-          {currentGame.gameState === 'play' && !isCurrentTurn && 
-            `Waiting for ${currentGame.players[currentGame.currentPlayerIndex]?.name} to take an action...`}
-            
-          {currentGame.gameState === 'action' && currentGame.currentAction && 
-            ((currentGame.actionResponses && currentGame.actionResponses.includes(playerId)) ? 
-              `You've responded to ${currentGame.players.find(p => p.id === currentGame.currentAction?.playerId)?.name}'s ${currentGame.currentAction.type}. Waiting for other players...` : 
-              `${currentGame.players.find(p => p.id === currentGame.currentAction?.playerId)?.name} performed ${currentGame.currentAction.type}. You can challenge or block.`)}
-            
-          {currentGame.gameState === 'challenge' && 
-            (currentGame.currentAction?.playerId === playerId ? 
-              `Your action was challenged! You must reveal a card to prove you have the required character.` : 
-              `${currentGame.players.find(p => p.id === currentGame.currentAction?.playerId)?.name}'s action was challenged. Waiting for them to respond...`)}
-            
-          {currentGame.gameState === 'block' && 
-            (currentGame.currentAction?.playerId === playerId ? 
-              `Your action was blocked! You can challenge the block (if you think they don't have the character) or accept it.` : 
-              `${currentGame.players.find(p => p.id === currentGame.currentAction?.playerId)?.name}'s action was blocked. Waiting for them to respond...`)}
+          {currentGame.gameState === 'game_over' ? (
+            <div className="game-over-message">
+              <h3>Game Over!</h3>
+              <p>Winner: {currentGame.players.find(p => !p.eliminated)?.name}</p>
+              <p>Congratulations!</p>
               
-          {currentGame.gameState === 'coup_response' && 
-            (currentGame.currentAction?.responderId === playerId ? 
-              `You've been couped by ${currentGame.players.find(p => p.id === currentGame.currentAction?.playerId)?.name}! Select a card to lose.` : 
-              `${currentGame.players.find(p => p.id === currentGame.currentAction?.responderId)?.name} is choosing which card to lose after being couped.`)}
+              {/* Vote to restart game section */}
+              <div className="restart-vote-section">
+                <p className="vote-count">
+                  {useGameStore.getState().getRestartVoteCount()} / {useGameStore.getState().getTotalPlayerCount()} players ready
+                </p>
+                
+                {useGameStore.getState().hasVotedToRestart() ? (
+                  <button 
+                    className="vote-button voted"
+                    onClick={() => useGameStore.getState().cancelRestartVote()}
+                  >
+                    Cancel Vote
+                  </button>
+                ) : (
+                  <button 
+                    className="vote-button"
+                    onClick={() => useGameStore.getState().voteForRestart()}
+                  >
+                    Vote to Start Next Game
+                  </button>
+                )}
+                
+                <p className="vote-info">Game will start automatically when all players vote</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              {currentGame.gameState === 'play' && isCurrentTurn && 
+                "It's your turn! Select an action below:"}
+                
+              {currentGame.gameState === 'play' && !isCurrentTurn && 
+                `Waiting for ${currentGame.players[currentGame.currentPlayerIndex]?.name} to take an action...`}
+                
+              {currentGame.gameState === 'action_response' && currentGame.currentAction && 
+                (currentGame.currentAction.responses.some(r => r.playerId === playerId) ? 
+                  `You've responded to ${currentGame.players.find(p => p.id === currentGame.currentAction?.action.playerId)?.name}'s ${currentGame.currentAction.action.type}. Waiting for other players...` : 
+                  `${currentGame.players.find(p => p.id === currentGame.currentAction?.action.playerId)?.name} performed ${currentGame.currentAction.action.type}. You can challenge or block.`)}
+                
+              {currentGame.gameState === 'reveal_challenge' && currentGame.currentAction?.challenge &&
+                (currentGame.currentAction.challenge.challengedId === playerId ? 
+                  `Your action was challenged! You must reveal a card to prove you have the required character.` : 
+                  `${currentGame.players.find(p => p.id === currentGame.currentAction?.challenge?.challengedId)?.name}'s action was challenged. Waiting for them to respond...`)}
+                
+              {currentGame.gameState === 'block_response' && currentGame.currentAction?.block &&
+                (currentGame.currentAction.action.playerId === playerId ? 
+                  `Your action was blocked! You can challenge the block (if you think they don't have the character) or accept it.` : 
+                  `${currentGame.players.find(p => p.id === currentGame.currentAction?.action.playerId)?.name}'s action was blocked. Waiting for them to respond...`)}
+                  
+              {currentGame.gameState === 'lose_influence' && 
+                (currentGame.pendingActionFrom === playerId ? 
+                  `You need to lose influence! Select a card to lose.` : 
+                  `${currentGame.players.find(p => p.id === currentGame.pendingActionFrom)?.name} is choosing which card to lose.`)}
+                  
+              {currentGame.gameState === 'exchange_selection' && currentGame.currentAction?.action &&
+                (currentGame.currentAction.action.playerId === playerId ? 
+                  'You drew cards from the deck! Select which cards to keep.' : 
+                  `${currentGame.players.find(p => p.id === currentGame.currentAction?.action.playerId)?.name} is selecting which cards to keep after drawing from the deck.`)}
+            </>
+          )}
         </div>
         
         {/* Regular turn actions */}
@@ -308,16 +422,16 @@ export function GamePage() {
         )}
         
         {/* Challenge/Block options when another player takes an action */}
-        {currentGame.gameState === 'action' && 
+        {currentGame.gameState === 'action_response' && 
          currentGame.currentAction && 
-         currentGame.currentAction.playerId !== playerId &&
-         !currentPlayer?.eliminated &&
-         (!currentGame.actionResponses || !currentGame.actionResponses.includes(playerId)) && (
+         currentGame.currentAction.action.playerId !== playerId &&
+         !currentPlayer?.eliminated &&  // Ensure player is not eliminated
+         !currentGame.currentAction.responses.some(r => r.playerId === playerId) && (
           <div id="reaction-buttons">
-            <h3>React to {currentGame.players.find(p => p.id === currentGame.currentAction?.playerId)?.name}'s {currentGame.currentAction.type} action:</h3>
+            <h3>React to {currentGame.players.find(p => p.id === currentGame.currentAction?.action.playerId)?.name}'s {currentGame.currentAction.action.type} action:</h3>
             
             {/* Challenge option */}
-            {['tax', 'assassinate', 'steal', 'exchange'].includes(currentGame.currentAction.type) && (
+            {['tax', 'assassinate', 'steal', 'exchange'].includes(currentGame.currentAction.action.type) && (
               <button 
                 className="reaction-button challenge" 
                 onClick={handleChallenge}
@@ -327,7 +441,7 @@ export function GamePage() {
             )}
             
             {/* Block options based on action type */}
-            {currentGame.currentAction.type === 'foreign_aid' && (
+            {currentGame.currentAction.action.type === 'foreign_aid' && (
               <button 
                 className="reaction-button block" 
                 onClick={() => handleBlock('Duke')}
@@ -336,7 +450,8 @@ export function GamePage() {
               </button>
             )}
             
-            {currentGame.currentAction.type === 'assassinate' && (
+            {currentGame.currentAction.action.type === 'assassinate' && 
+              currentGame.currentAction.action.target === playerId && (
               <button 
                 className="reaction-button block" 
                 onClick={() => handleBlock('Contessa')}
@@ -345,7 +460,7 @@ export function GamePage() {
               </button>
             )}
             
-            {currentGame.currentAction.type === 'steal' && (
+            {currentGame.currentAction.action.type === 'steal' && (
               <>
                 <button 
                   className="reaction-button block" 
@@ -371,66 +486,131 @@ export function GamePage() {
           </div>
         )}
         
-        {/* Coup response - let player choose which card to lose */}
-        {currentGame.gameState === 'coup_response' && currentGame.currentAction?.responderId === playerId && (
-          <div id="coup-response-section">
-            <h3>You've been couped! Select a card to lose:</h3>
+        {/* Lose influence section */}
+        {currentGame.gameState === 'lose_influence' && currentGame.pendingActionFrom === playerId && (
+          <div id="lose-influence-section">
+            <h3>You must lose influence! Select a card to lose:</h3>
             <div className="reveal-card-options">
-              {currentPlayer?.cards.map((card, index) => (
-                !card.eliminated && (
-                  <button 
-                    key={index}
-                    className={`card-button ${card.character.toLowerCase()}`}
-                    onClick={() => handleRevealCard(index)}
-                  >
-                    {card.character}
-                  </button>
-                )
-              ))}
+              {currentPlayer?.cards
+                .filter(card => !card.eliminated)
+                .map((card, index) => {
+                  // Get the real index in the original array
+                  const originalIndex = currentPlayer.cards.findIndex(
+                    (c) => c === card
+                  );
+                  return (
+                    <button 
+                      key={index}
+                      className={`card-button ${card.character.toLowerCase()}`}
+                      onClick={() => handleLoseInfluence(originalIndex)}
+                    >
+                      {card.character}
+                    </button>
+                  );
+                })
+              }
             </div>
           </div>
         )}
         
         {/* Card reveal for challenges */}
-        {currentGame.gameState === 'challenge' && currentGame.currentAction?.playerId === playerId && (
+        {currentGame.gameState === 'reveal_challenge' && currentGame.pendingActionFrom === playerId && (
           <div id="reveal-card-section">
             <h3>Choose a card to reveal to respond to the challenge:</h3>
             <div className="reveal-card-options">
-              {currentPlayer?.cards.map((card, index) => (
-                !card.eliminated && (
-                  <button 
-                    key={index}
-                    className={`card-button ${card.character.toLowerCase()}`}
-                    onClick={() => handleRevealCard(index)}
-                  >
-                    {card.character}
-                  </button>
-                )
-              ))}
+              {currentPlayer?.cards
+                .filter(card => !card.eliminated)
+                .map((card, index) => {
+                  // Get the real index in the original array
+                  const originalIndex = currentPlayer.cards.findIndex(
+                    (c) => c === card
+                  );
+                  return (
+                    <button 
+                      key={index}
+                      className={`card-button ${card.character.toLowerCase()}`}
+                      onClick={() => handleRevealCard(originalIndex)}
+                    >
+                      {card.character}
+                    </button>
+                  );
+                })
+              }
             </div>
           </div>
         )}
         
-        {/* Block response options - for the active player who was blocked */}
-        {currentGame.gameState === 'block' && currentGame.currentAction?.playerId === playerId && (
+        {/* Block response options */}
+        {currentGame.gameState === 'block_response' && (
           <div id="block-response-section">
-            <h3>Your action was blocked! How do you respond?</h3>
+            <h3>
+              {currentGame.players.find(p => p.id === currentGame.currentAction?.block?.blockerId)?.name} 
+              blocked with {currentGame.currentAction?.block?.character}.
+            </h3>
             
-            <div className="block-response-buttons">
-              <button 
-                className="challenge-block-button"
-                onClick={() => handleChallengeBlock()}
-              >
-                Challenge Block (They don't have the character)
-              </button>
-              
-              <button 
-                className="accept-block-button"
-                onClick={handleAcceptBlock}
-              >
-                Accept Block (Your action fails)
-              </button>
-            </div>
+            {/* Special message explaining that initiator's response resolves immediately */}
+            {currentGame.currentAction?.action.playerId === playerId && 
+             !currentGame.currentAction?.responses.some(r => r.playerId === playerId) && (
+              <div className="initiator-note">
+                <p>Your action was blocked. Your response will resolve this immediately.</p>
+              </div>
+            )}
+            
+            {/* If the initiator has challenged a block, show waiting message */}
+            {currentGame.currentAction?.action.playerId !== playerId && 
+             currentGame.currentAction?.responses.some(r => 
+               r.playerId === currentGame.currentAction?.action.playerId && r.type === 'challenge'
+             ) && (
+              <div className="waiting-message">
+                <p>Waiting for the result of {currentGame.players.find(p => p.id === currentGame.currentAction?.action.playerId)?.name}'s challenge...</p>
+              </div>
+            )}
+            
+            {/* Only non-eliminated players who aren't the blocker can challenge or pass */}
+            {currentGame.currentAction?.block?.blockerId !== playerId && 
+             /* Players can respond to blocks even if they already responded to the original action */
+             !currentGame.currentAction?.responses.some(r => 
+               r.playerId === playerId && 
+               /* Only check for responses made in the block response phase */
+               currentGame.gameState === 'block_response'
+             ) && 
+             !currentPlayer?.eliminated && (
+              <div className="block-response-buttons">
+                <button 
+                  className="challenge-block-button"
+                  onClick={() => handleChallengeBlock()}
+                >
+                  Challenge Block (They don't have {currentGame.currentAction.block?.character})
+                </button>
+                
+                {/* Only the initiator gets the Accept Block button */}
+                {currentGame.currentAction?.action.playerId === playerId ? (
+                  <button 
+                    className="accept-block-button initiator"
+                    onClick={handleAcceptBlock}
+                  >
+                    Accept Block (Your action fails)
+                  </button>
+                ) : (
+                  <button 
+                    className="pass-button"
+                    onClick={handlePass}
+                  >
+                    Pass (Don't challenge)
+                  </button>
+                )}
+              </div>
+            )}
+            
+            {/* Show if player has already responded */}
+            {currentGame.currentAction?.responses.some(r => r.playerId === playerId) && !currentPlayer?.eliminated && (
+              <div>You've responded to this block. Waiting for other players...</div>
+            )}
+            
+            {/* Show for eliminated players */}
+            {currentPlayer?.eliminated && (
+              <div>You have been eliminated and cannot participate.</div>
+            )}
           </div>
         )}
       </div>
@@ -445,17 +625,23 @@ export function GamePage() {
             <div className="player-name">{player.name} {player.id === playerId && '(You)'}</div>
             <div className="player-coins">Coins: {player.coins}</div>
             <div className="player-cards">
-              {player.cards.map((card, idx) => (
-                <div 
-                  key={idx} 
-                  className={`card ${card.character.toLowerCase()} ${card.eliminated ? 'eliminated' : ''} ${player.id === playerId ? 'revealed' : ''}`}
-                  data-card-index={idx}
-                >
-                  <div className="card-name">
-                    {(player.id === playerId || card.eliminated) ? card.character : "Hidden"}
-                  </div>
-                </div>
-              ))}
+              {player.eliminated ? (
+                <div className="player-eliminated-status">Eliminated</div>
+              ) : (
+                player.cards
+                  .filter(card => !card.eliminated)
+                  .map((card, idx) => (
+                    <div 
+                      key={idx} 
+                      className={`card ${card.character.toLowerCase()} ${player.id === playerId ? 'revealed' : ''}`}
+                      data-card-index={idx}
+                    >
+                      <div className="card-name">
+                        {player.id === playerId ? card.character : "Hidden"}
+                      </div>
+                    </div>
+                  ))
+              )}
             </div>
           </div>
         ))}
@@ -464,9 +650,12 @@ export function GamePage() {
       <div id="game-log">
         <h3>Game Log</h3>
         <div id="log-entries">
-          {currentGame.log.map((entry, idx) => (
-            <div key={idx} className="log-entry">{entry}</div>
-          ))}
+          {currentGame.logs ? 
+            currentGame.logs.map((entry, idx) => (
+              <div key={idx} className="log-entry">{entry.message}</div>
+            )) : 
+            <div className="log-entry">No logs available</div>
+          }
         </div>
       </div>
       
@@ -478,6 +667,20 @@ export function GamePage() {
           onSelectTarget={handleSelectTarget}
           onCancel={handleCancelTargetSelection}
           actionType={currentActionType}
+        />
+      )}
+      
+      {/* Exchange card selection overlay */}
+      {currentGame && currentGame.gameState === 'exchange_selection' && 
+       currentGame.currentAction?.action.playerId === playerId && 
+       currentGame.currentAction.exchangeCards && 
+       currentPlayer && (
+        <CardReveal
+          activeCards={currentPlayer.cards.filter(card => !card.eliminated)}
+          drawnCards={currentGame.currentAction.exchangeCards}
+          maxSelect={Math.min(2, currentPlayer.cards.filter(card => !card.eliminated).length + currentGame.currentAction.exchangeCards.length)}
+          onComplete={handleCompleteExchange}
+          onCancel={handleCancelExchange}
         />
       )}
     </>

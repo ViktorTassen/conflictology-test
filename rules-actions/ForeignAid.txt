@@ -1,0 +1,105 @@
+Foreign Aid Action Logic Flow
+Basic Action: Foreign Aid
+
+Player Action: Player announces "Foreign Aid" to collect 2 coins from the treasury.
+Valid When: Always available (no coin requirement).
+Basic Effect: Gain 2 coins if not blocked.
+
+Response Scenarios
+
+Scenario 1 (Foreign Aid success)
+
+Player A declares Foreign Aid.
+UI changes: Player A wait for resolving.
+UI changes: Players B and C see 2 options: "Block with Duke" and "Allow action".
+When All players click "Allow action" button - It resolves this voting.
+Player A gains 2 coins
+UI changes: Turn ends, next player begins
+
+
+Scenario 2 (Duke blocks Foreign Aid successfully)
+
+Player A declares Foreign Aid
+UI changes: Player A wait for resolving.
+UI changes: Players B and C see 2 options: "Block with Duke" and "Allow action".
+Player B click "Block with Duke" button (claims he has Duke)
+UI changes: Player A see 2 options:  "Challenge Duke" and "Accept block".
+UI changes: Player B wait for resolving.
+UI changes: Player C see 2 options: "Challenge Duke" and "Allow action".
+
+Player A click "Accept block". It resolves this voting immideately.
+The original action is blocked (player gains no coins)
+Player A gain 0 coins.
+Turn ends, next player begins
+
+Scenario 3A (Duke blocks Foreign Aid successfully after challenge from Player who initiate Foreign Aid)
+Player A declares Foreign Aid
+UI changes: Player A wait for resolving.
+UI changes: Players B and C see 2 options: "Block with Duke" and "Allow action".
+Player B click "Block with Duke" button (claims he has Duke)
+UI changes: Player A see 2 options:  "Challenge Duke" and "Accept block".
+UI changes: Player B wait for resolving.
+UI changes: Player C see 2 options: "Challenge Duke" and "Allow action".
+Player A click "Challenge Duke" (he challenges player B claim of Duke). 
+
+If Player B has Duke:
+It resolves this voting immideately.
+The Duke is revealed and then shuffled back into the deck
+Player B draws a replacement card
+Player A loses one influence (discards a card of their choice)
+Foreign Aid is blocked successfully (no coins gained for Player A)
+Turn ends, next player begins
+
+
+
+
+Scenario 3B (Blocker loses card after challenge from Player who initiate Foreign Aid)
+Player A declares Foreign Aid
+UI changes: Player A wait for resolving.
+UI changes: Players B and C see 2 options: "Block with Duke" and "Allow action".
+Player B click "Block with Duke" button (claims he has Duke)
+I changes: Player A see 2 options:  "Challenge Duke" and "Accept block".
+UI changes: Player B wait for resolving.
+UI changes: Player C see 2 options: "Challenge Duke" and "Allow action".
+Player A click "Challenge Duke" (he challenges player B claim of Duke).
+
+
+If blocking player do NOT have Duke:
+It resolves this voting immideately.
+Player B loses one influence (discards a card of their choice)
+The block fails.
+Player A successfully takes Foreign Aid (gains 2 coins)
+Turn ends, next player begins.
+
+
+Scenario 3C (Duke blocks Foreign Aid successfully after challenge from another Player)
+Player A declares Foreign Aid
+UI changes: Player A wait for resolving.
+UI changes: Players B and C see 2 options: "Block with Duke" and "Allow action".
+Player B click "Block with Duke" button (claims he has Duke)
+Player C click "Challenge Duke" (he challenges player B claim of Duke).
+
+If Player B has Duke:
+It resolves this voting immideately.
+The Duke is revealed and then shuffled back into the deck
+Player B draws a replacement card
+Player C loses one influence (discards a card of their choice)
+Foreign Aid is blocked successfully (no coins gained for Player A)
+Turn ends, next player begins
+
+
+Scenario 3C (Blocker loses card after challenge from another Player)
+Player A declares Foreign Aid
+UI changes: Player A wait for resolving.
+UI changes: Players B and C see 2 options: "Block with Duke" and "Allow action".
+Player B click "Block with Duke" button (claims he has Duke)
+Player C click "Challenge Duke" (he challenges player B claim of Duke).
+
+If blocking player do NOT have Duke:
+It resolves this voting immideately.
+Player B loses one influence (discards a card of their choice)
+The block fails.
+Player A successfully takes Foreign Aid (gains 2 coins)
+Turn ends, next player begins.
+
+

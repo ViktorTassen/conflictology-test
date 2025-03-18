@@ -1,0 +1,51 @@
+Income Action Logic Flow
+Basic Action: Income
+
+Player Action: Player announces "Income".
+Valid When: Always available (no coin requirement).
+Basic Effect: Gain 1 coin from the treasury.
+
+Response Scenarios
+Scenario 1: Standard Execution
+
+Player declares "Income"
+Player gains 1 coin from the treasury
+Turn ends, next player begins
+
+Important Notes:
+
+Income cannot be blocked or challenged
+There are no counter-actions to Income
+This is the simplest and safest action in the game
+
+Implementation Notes
+
+Action Declaration Stage:
+
+Player declares "Income"
+System immediately processes the action (no player response window needed)
+
+
+Action Resolution Stage:
+
+System adds 1 coin to player's total
+System advances to next player
+
+
+UI Elements for Income Action:
+
+Quick animation showing 1 coin moving from treasury to player
+Simple confirmation message: "[Player Name] takes Income (1 coin)"
+No waiting period or response buttons for other players
+
+
+Strategic Context:
+
+System could display optional strategy tip for new players: "Income is always safe but provides fewer coins than riskier actions"
+No special UI elements needed beyond standard action selection
+
+
+Game Flow Optimization:
+
+Since Income cannot be responded to, the game should move quickly to the next player
+Consider a shorter animation/pause than for contestable actions.

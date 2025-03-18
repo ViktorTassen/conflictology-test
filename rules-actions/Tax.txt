@@ -1,0 +1,71 @@
+Taxes (Duke) Action Logic Flow
+Basic Action: Taxes
+
+Player Action: Player announces "Taxes" (claiming to have the Duke).
+Valid When: Always available (no coin requirement).
+Basic Effect: Gain 3 coins from the treasury.
+
+Response Scenarios
+Scenario 1: No Response
+
+Player declares "Taxes"
+No other player challenges
+Player gains 3 coins
+Turn ends, next player begins
+
+Scenario 2: Another Player Challenges
+
+Player declares "Taxes"
+Challenging player announces "I challenge your Duke"
+Original player must reveal their card:
+
+If original player has Duke:
+
+The Duke is revealed and then shuffled back into the deck
+Original player draws a replacement card
+Challenging player loses one influence (discards a card of their choice)
+Original player successfully takes Taxes (gains 3 coins)
+Turn ends, next player begins
+
+
+If original player doesn't have Duke:
+
+Original player loses one influence (discards a card of their choice)
+The action fails (no coins gained)
+Turn ends, next player begins
+
+
+
+
+
+Implementation Notes
+
+Action Declaration Stage:
+
+Player declares "Taxes"
+System should prompt all other players for possible challenges (with a time limit)
+
+
+Challenge Response Stage:
+
+If any player challenges, system should pause the action
+System should handle card reveals as needed
+
+
+Challenge Resolution Stage:
+
+System should track influence loss
+System should handle card replacements
+
+
+Action Resolution Stage:
+
+System completes the action based on preceding outcomes
+System updates coin counts
+System advances to next player
+
+
+Important Note:
+
+Taxes cannot be blocked, only challenged
+This action is specifically associated with the Duke character card

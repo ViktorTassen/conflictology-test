@@ -1,0 +1,59 @@
+Coup Action Logic Flow
+Basic Action: Coup
+
+Player Action: Player announces "Coup" and targets another player.
+Valid When: Player has 7 or more coins (mandatory if player has 10+ coins).
+Cost: 7 coins paid to treasury.
+Basic Effect: Target player loses one influence (card) of their choice.
+
+Response Scenarios
+Scenario 1: Standard Execution
+
+Player declares Coup against a target player
+Player pays 7 coins to the treasury
+Target player must select and reveal one of their face-down cards
+The revealed card is removed from play (that influence is lost)
+If target player has no remaining influences, they are eliminated from the game
+Turn ends, next player begins
+
+Important Notes:
+
+Coup cannot be blocked or challenged
+There are no counter-actions to a Coup
+
+Implementation Notes
+
+Action Declaration Stage:
+
+Player declares "Coup" and selects a target player
+System verifies player has 7+ coins
+System automatically deducts 7 coins from player
+
+
+Target Selection Stage:
+
+System prompts the targeted player to select which influence (card) to lose
+Target player must select one of their face-down cards
+
+
+Card Revelation Stage:
+
+Selected card is revealed to all players
+Card is removed from play
+
+
+Player Elimination Check:
+
+If target player has no remaining influences, they are eliminated
+System removes eliminated player from turn order
+
+
+Action Resolution Stage:
+
+System advances to next player
+
+
+Mandatory Coup Rule:
+
+If a player begins their turn with 10+ coins, they must perform a Coup
+System should enforce this rule, preventing other actions from being selected

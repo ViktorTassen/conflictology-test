@@ -82,6 +82,16 @@ button:disabled {
   border-radius: 5px;
 }
 
+#deck-info {
+  margin-top: 10px;
+  padding: 8px;
+  background-color: #2c3e50;
+  color: white;
+  border-radius: 4px;
+  display: inline-block;
+  font-weight: bold;
+}
+
 #actions-panel {
   margin-bottom: 20px;
   padding: 15px;
@@ -169,7 +179,8 @@ button:disabled {
 }
 
 .player-area.eliminated {
-  opacity: 0.5;
+  background-color: #f8d7da;
+  border: 1px solid #f5c6cb;
 }
 
 .player-name {
@@ -205,15 +216,24 @@ button:disabled {
   background-color: #f8f9fa;
 }
 
-.card.eliminated {
-  opacity: 0.6;
-  background-color: #e74c3c;
-  color: white;
-}
+/* Cards are no longer shown when eliminated */
 
 .card-name {
   font-weight: bold;
   margin-bottom: 5px;
+}
+
+.player-eliminated-status {
+  font-weight: bold;
+  color: #721c24;
+  text-transform: uppercase;
+  padding: 10px;
+  background-color: #f8d7da;
+  border-radius: 4px;
+  text-align: center;
+  letter-spacing: 1px;
+  width: 100%;
+  margin-top: 10px;
 }
 
 #game-log {
@@ -282,6 +302,94 @@ button:disabled {
   background-color: #d1ecf1;
   color: #0c5460;
   border: 1px solid #bee5eb;
+}
+
+#action-message.coup_response {
+  background-color: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+  animation: pulse 1.5s infinite;
+}
+
+#action-message.exchange_selection {
+  background-color: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+  animation: pulse 1.5s infinite;
+}
+
+#action-message.game_over {
+  background-color: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+.game-over-message {
+  text-align: center;
+  padding: 20px;
+}
+
+.game-over-message h3 {
+  font-size: 24px;
+  margin-bottom: 15px;
+  color: #e74c3c;
+}
+
+.game-over-message p {
+  font-size: 18px;
+  margin-bottom: 10px;
+}
+
+/* Restart voting section */
+.restart-vote-section {
+  margin-top: 20px;
+  padding: 15px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+}
+
+.vote-count {
+  font-size: 20px;
+  font-weight: bold;
+  margin-bottom: 15px;
+}
+
+.vote-button {
+  padding: 12px 24px;
+  font-size: 16px;
+  background-color: #28a745;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin: 10px 0;
+}
+
+.vote-button:hover {
+  background-color: #218838;
+  transform: translateY(-2px);
+}
+
+.vote-button.voted {
+  background-color: #dc3545;
+}
+
+.vote-button.voted:hover {
+  background-color: #c82333;
+}
+
+.vote-info {
+  font-size: 14px;
+  color: #6c757d;
+  margin-top: 10px;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.7; }
+  50% { opacity: 1; }
+  100% { opacity: 0.7; }
 }
 
 #reaction-buttons {
@@ -394,6 +502,34 @@ button:disabled {
 
 .accept-block-button:hover {
   background-color: #5a6268;
+}
+
+.accept-block-button.initiator {
+  background-color: #dc3545;
+  animation: pulse 1.5s infinite;
+}
+
+.accept-block-button.initiator:hover {
+  background-color: #c82333;
+}
+
+.initiator-note {
+  background-color: #fff3cd;
+  color: #856404;
+  padding: 10px;
+  border-radius: 5px;
+  margin: 10px 0;
+  font-weight: bold;
+  border: 1px solid #ffeeba;
+}
+
+.waiting-message {
+  background-color: #d1ecf1;
+  color: #0c5460;
+  padding: 10px;
+  border-radius: 5px;
+  margin: 10px 0;
+  border: 1px solid #bee5eb;
 }
 
 .player-area.current {

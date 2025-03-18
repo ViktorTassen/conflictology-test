@@ -1,0 +1,149 @@
+Implementation Notes
+
+Action Declaration Stage:
+
+Player declares "Steal" and selects a target player
+System should verify target player has at least 1 coin
+
+
+Challenge Response Stage:
+
+System should prompt all players for possible challenges (with a time limit)
+If challenged, system handles challenge resolution before proceeding
+
+
+Block Response Stage:
+
+If not challenged, system prompts target player for block decision
+If target blocks with Captain or Ambassador, system prompts original player for challenge decision
+
+
+Action Resolution Stage:
+
+System transfers coins based on preceding outcomes
+System handles card replacements as needed
+System advances to next player
+
+
+
+UI Implementation for Player Interactions
+General UI Flow
+
+Action Selection Screen
+
+Active player sees available actions (Foreign Aid, Coup, Taxes, Assassinate, Steal, etc.)
+Each action shows its cost (if any) and brief description
+Unavailable actions are grayed out (e.g., Coup when <7 coins)
+Mandatory actions are highlighted (e.g., Coup when 10+ coins)
+
+
+Target Selection Screen
+
+For targeted actions (Coup, Assassinate, Steal), show all valid targets
+Display each target's name, coin count, and influence count
+Allow player to select a target
+
+
+Action Announcement
+
+System announces: "[Player Name] declares [Action]" to all players
+For targeted actions: "[Player Name] declares [Action] against [Target Name]"
+Animation/highlight shows the action happening
+
+
+Response Window
+
+Timer appears (e.g., 10-15 seconds)
+All eligible players see response buttons:
+
+"Challenge" (always available)
+"Block with [Character]" (only when applicable)
+"Pass" (always available)
+
+
+First player to click a response button takes that action
+
+
+Block/Challenge Resolution
+
+System announces the block/challenge
+If block: "[Player Name] blocks with [Character]"
+If challenge: "[Player Name] challenges [Target Name]'s [Character]"
+Original player sees response options (accept or challenge)
+
+
+Card Reveal Screen
+
+Challenged player sees their cards and selects one to reveal
+All players see the revealed card with animation
+System announces the outcome
+
+
+Influence Loss Screen
+
+Player losing influence sees their cards and selects one to discard
+All players see which influence was lost (but not which specific card)
+System announces: "[Player Name] loses influence ([Character])"
+
+
+Action Resolution
+
+System shows final outcome with animation (coins moving, etc.)
+System announces: "Action succeeds" or "Action fails"
+
+
+
+Specific UI Elements
+
+Player Information Panel
+
+Each player's name, coin count, and face-down cards
+Eliminated players grayed out
+
+
+Action Log
+
+Scrollable list showing all actions, challenges, blocks, and outcomes
+Timestamp for each event
+
+
+Timer Display
+
+Countdown timer for responses
+Visual indicator (changing color as time runs out)
+
+
+Response Buttons
+
+Large, clear buttons for each possible response
+Hover tooltips explaining each option
+
+
+Card Selection Interface
+
+When revealing or discarding, show all available cards
+Clear selection indicator
+
+
+Notification System
+
+Audio cue when action is required
+Highlight player's name when their input is needed
+Modal popup for urgent decisions
+
+
+Animation Elements
+
+Coin transfers animated
+Card reveals with flip animation
+Character illustrations for each action
+
+
+Help/Reference Section
+
+Collapsible panel showing all character abilities
+Quick reference for all actions and responses
+
+
+
+This UI structure ensures that all players clearly understand what's happening at each step of the game while maintaining proper information hiding for face-down cards and allowing for timely responses to actions.

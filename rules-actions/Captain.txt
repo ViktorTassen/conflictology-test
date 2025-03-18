@@ -1,0 +1,139 @@
+Steal (Captain) Action Logic Flow
+Basic Action: Steal
+
+Player Action: Player announces "Steal" and targets another player (claiming to have the Captain).
+Valid When: Always available (no coin requirement).
+Basic Effect: Take 2 coins from the target player.
+
+Response Scenarios
+Scenario 1: No Response
+
+Player declares "Steal" against a target player
+No other player blocks or challenges
+Player takes up to 2 coins from the target player (if target has less than 2 coins, player takes all available)
+Turn ends, next player begins
+
+Scenario 2: Target Player Blocks with Captain
+
+Player declares "Steal" against a target player
+Target player announces "I block with Captain"
+The stealing is blocked (no coins are transferred)
+
+Sub-scenario 2A: Original player accepts the block
+
+Original player accepts the block
+No coins are transferred
+Turn ends, next player begins
+
+Sub-scenario 2B: Original player challenges the block
+
+Original player says "I challenge your Captain"
+Blocking player must reveal their card:
+
+If blocking player has Captain:
+
+The Captain is revealed and then shuffled back into the deck
+Blocking player draws a replacement card
+Original player loses one influence (discards a card of their choice)
+Stealing is blocked successfully (no coins transferred)
+Turn ends, next player begins
+
+
+If blocking player doesn't have Captain:
+
+Blocking player loses one influence (discards a card of their choice)
+The block fails
+Original player takes up to 2 coins from target player
+Turn ends, next player begins
+
+
+
+
+
+Scenario 3: Target Player Blocks with Ambassador
+
+Player declares "Steal" against a target player
+Target player announces "I block with Ambassador"
+The stealing is blocked (no coins are transferred)
+
+Sub-scenario 3A: Original player accepts the block
+
+Original player accepts the block
+No coins are transferred
+Turn ends, next player begins
+
+Sub-scenario 3B: Original player challenges the block
+
+Original player says "I challenge your Ambassador"
+Blocking player must reveal their card:
+
+If blocking player has Ambassador:
+
+The Ambassador is revealed and then shuffled back into the deck
+Blocking player draws a replacement card
+Original player loses one influence (discards a card of their choice)
+Stealing is blocked successfully (no coins transferred)
+Turn ends, next player begins
+
+
+If blocking player doesn't have Ambassador:
+
+Blocking player loses one influence (discards a card of their choice)
+The block fails
+Original player takes up to 2 coins from target player
+Turn ends, next player begins
+
+
+
+
+
+Scenario 4: Another Player Challenges the Captain Claim
+
+Player declares "Steal" against a target player
+Challenging player announces "I challenge your Captain"
+Original player must reveal their card:
+
+If original player has Captain:
+
+The Captain is revealed and then shuffled back into the deck
+Original player draws a replacement card
+Challenging player loses one influence (discards a card of their choice)
+Stealing proceeds (unless blocked by Captain or Ambassador)
+If not blocked, original player takes up to 2 coins from target player
+
+
+If original player doesn't have Captain:
+
+Original player loses one influence (discards a card of their choice)
+The action fails (no coins transferred)
+Turn ends, next player begins
+
+
+
+
+
+Implementation Notes
+
+Action Declaration Stage:
+
+Player declares "Steal" and selects a target player
+System should verify target player has at least 1 coin
+
+
+Challenge Response Stage:
+
+System should prompt all players for possible challenges (with a time limit)
+If challenged, system handles challenge resolution before proceeding
+
+
+Block Response Stage:
+
+If not challenged, system prompts target player for block decision
+If target blocks with Captain or Ambassador, system prompts original player for challenge decision
+
+
+Action Resolution Stage:
+
+System transfers coins based on preceding outcomes
+System handles card replacements as needed
+System advances to next player
