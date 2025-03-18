@@ -515,7 +515,8 @@ export function GamePage() {
               </button>
             )}
             
-            {currentGame.currentAction.action.type === 'steal' && (
+            {currentGame.currentAction.action.type === 'steal' && 
+              currentGame.currentAction.action.target === playerId && (
               <>
                 <button 
                   className="reaction-button block" 

@@ -1,139 +1,181 @@
-Steal (Captain) Action Logic Flow
-Basic Action: Steal
+Captain Card Scenarios in Coup: UI Flow and Outcomes
 
-Player Action: Player announces "Steal" and targets another player (claiming to have the Captain).
-Valid When: Always available (no coin requirement).
-Basic Effect: Take 2 coins from the target player.
+Basic Action: Steal (Captain)
+
+Player Action: Player A announces "Steal" and targets another player (claiming to have Captain).
+
+Valid When: Target has at least 1 coin (steals up to 2 coins).
+
+Basic Effect: Target loses 2 coins (or all their coins if <2), and Player A gains that amount, unless blocked.
 
 Response Scenarios
-Scenario 1: No Response
+Scenario 1 (Steal Success)
 
-Player declares "Steal" against a target player
-No other player blocks or challenges
-Player takes up to 2 coins from the target player (if target has less than 2 coins, player takes all available)
-Turn ends, next player begins
+Action: Player A declares "Steal" targeting Player B.
 
-Scenario 2: Target Player Blocks with Captain
+UI Changes:
 
-Player declares "Steal" against a target player
-Target player announces "I block with Captain"
-The stealing is blocked (no coins are transferred)
+Player A waits for resolving.
 
-Sub-scenario 2A: Original player accepts the block
+Player B sees: "Challenge Captain", "Block with Captain/Ambassador", "Allow action".
 
-Original player accepts the block
-No coins are transferred
-Turn ends, next player begins
+Other players see: "Challenge Captain", "Allow action".
 
-Sub-scenario 2B: Original player challenges the block
+Outcome:
 
-Original player says "I challenge your Captain"
-Blocking player must reveal their card:
+Player B clicks "Allow action".
 
-If blocking player has Captain:
+Player B loses 2 coins (or all if <2), Player A gains them.
 
-The Captain is revealed and then shuffled back into the deck
-Blocking player draws a replacement card
-Original player loses one influence (discards a card of their choice)
-Stealing is blocked successfully (no coins transferred)
-Turn ends, next player begins
+Turn ends.
 
+Scenario 2A (Target Challenges, Captain Valid)
 
-If blocking player doesn't have Captain:
+Action: Player B clicks "Challenge Captain".
 
-Blocking player loses one influence (discards a card of their choice)
-The block fails
-Original player takes up to 2 coins from target player
-Turn ends, next player begins
+Resolution:
 
+If Player A has Captain:
 
+Player B loses 1 influence (card).
 
+Steal proceeds: Player B loses 2 coins, Player A gains them.
 
+UI: Highlight Player B’s card loss and coin transfer.
 
-Scenario 3: Target Player Blocks with Ambassador
+Turn ends.
 
-Player declares "Steal" against a target player
-Target player announces "I block with Ambassador"
-The stealing is blocked (no coins are transferred)
+Scenario 2B (Target Challenges, Captain Invalid)
 
-Sub-scenario 3A: Original player accepts the block
+Resolution:
 
-Original player accepts the block
-No coins are transferred
-Turn ends, next player begins
+If Player A does NOT have Captain:
 
-Sub-scenario 3B: Original player challenges the block
+Player A loses 1 influence (discards a card).
 
-Original player says "I challenge your Ambassador"
-Blocking player must reveal their card:
+Steal fails.
 
-If blocking player has Ambassador:
+UI: Highlight Player A’s card loss.
 
-The Ambassador is revealed and then shuffled back into the deck
-Blocking player draws a replacement card
-Original player loses one influence (discards a card of their choice)
-Stealing is blocked successfully (no coins transferred)
-Turn ends, next player begins
+Turn ends.
 
+Scenario 3A (Block with Captain, Challenge Fails)
 
-If blocking player doesn't have Ambassador:
+Action:
 
-Blocking player loses one influence (discards a card of their choice)
-The block fails
-Original player takes up to 2 coins from target player
-Turn ends, next player begins
+Player B clicks "Block with Captain".
 
+Player A sees: "Challenge Block", "Accept block".
 
+Other players see: "Challenge Block", "Allow action".
 
+Resolution:
 
+Player A clicks "Challenge Block".
 
-Scenario 4: Another Player Challenges the Captain Claim
+If Player B has Captain:
 
-Player declares "Steal" against a target player
-Challenging player announces "I challenge your Captain"
-Original player must reveal their card:
+Player A loses 1 influence.
 
-If original player has Captain:
+Block succeeds.
 
-The Captain is revealed and then shuffled back into the deck
-Original player draws a replacement card
-Challenging player loses one influence (discards a card of their choice)
-Stealing proceeds (unless blocked by Captain or Ambassador)
-If not blocked, original player takes up to 2 coins from target player
+UI: Reveal Captain, shuffle into deck. Player B draws replacement.
 
+Turn ends.
 
-If original player doesn't have Captain:
+Scenario 3B (Block with Captain, Challenge Succeeds)
 
-Original player loses one influence (discards a card of their choice)
-The action fails (no coins transferred)
-Turn ends, next player begins
+Resolution:
 
+If Player B does NOT have Captain:
 
+Player B loses 1 influence.
 
+Steal proceeds: Player B loses 2 coins, Player A gains them.
 
+UI: Highlight Player B’s card loss and coin transfer.
 
-Implementation Notes
+Turn ends.
 
-Action Declaration Stage:
+Scenario 3C (Block with Ambassador, Challenge Fails)
 
-Player declares "Steal" and selects a target player
-System should verify target player has at least 1 coin
+Action:
 
+Player B clicks "Block with Ambassador".
 
-Challenge Response Stage:
+Player A sees: "Challenge Block", "Accept block".
 
-System should prompt all players for possible challenges (with a time limit)
-If challenged, system handles challenge resolution before proceeding
+Resolution:
 
+Player A clicks "Challenge Block".
 
-Block Response Stage:
+If Player B has Ambassador:
 
-If not challenged, system prompts target player for block decision
-If target blocks with Captain or Ambassador, system prompts original player for challenge decision
+Player A loses 1 influence.
 
+Block succeeds.
 
-Action Resolution Stage:
+UI: Reveal Ambassador, shuffle into deck. Player B draws replacement.
 
-System transfers coins based on preceding outcomes
-System handles card replacements as needed
-System advances to next player
+Turn ends.
+
+Scenario 3D (Block with Ambassador, Challenge Succeeds)
+
+Resolution:
+
+If Player B does NOT have Ambassador:
+
+Player B loses 1 influence.
+
+Steal proceeds: Player B loses 2 coins, Player A gains them.
+
+UI: Highlight Player B’s card loss and coin transfer.
+
+Turn ends.
+
+Scenario 4A (Third-Party Challenge, Captain Valid)
+
+Action: Player C (another player) clicks "Challenge Captain".
+
+Resolution:
+
+If Player A has Captain:
+
+Player C loses 1 influence.
+
+Steal proceeds: Player B loses 2 coins, Player A gains them.
+
+UI: Player B now sees "Block with Captain/Ambassador" or "Allow action".
+
+Turn ends after resolution.
+
+Scenario 4B (Third-Party Challenge, Captain Invalid)
+
+Resolution:
+
+If Player A does NOT have Captain:
+
+Player A loses 1 influence.
+
+Steal fails.
+
+UI: Highlight Player A’s card loss.
+
+Turn ends.
+
+Scenario 5 (Block Accepted Without Challenge)
+
+Action:
+
+Player B blocks with Captain/Ambassador.
+
+Player A clicks "Accept block".
+
+Outcome:
+
+Steal blocked. No coin transfer.
+
+UI: "Block successful."
+
+Turn ends.
+

@@ -1319,6 +1319,20 @@ export class GameService implements IGameService {
         game.id, 
         `${player.name} blocked Foreign Aid with Duke.`
       );
+    } else if (game.currentAction!.action.type === 'steal' && character === 'Captain') {
+      // Special message for blocking Steal with Captain (Scenario 3A in Captain.txt)
+      const actionPlayer = game.players.find(p => p.id === game.currentAction!.action.playerId);
+      await this.addGameLog(
+        game.id, 
+        `${player.name} blocked ${actionPlayer?.name || 'unknown'}'s steal with Captain.`
+      );
+    } else if (game.currentAction!.action.type === 'steal' && character === 'Ambassador') {
+      // Special message for blocking Steal with Ambassador (Scenario 3C in Captain.txt)
+      const actionPlayer = game.players.find(p => p.id === game.currentAction!.action.playerId);
+      await this.addGameLog(
+        game.id, 
+        `${player.name} blocked ${actionPlayer?.name || 'unknown'}'s steal with Ambassador.`
+      );
     } else if (game.currentAction!.action.type === 'assassinate' && character === 'Contessa') {
       // Special message for blocking Assassinate with Contessa (Scenario 3A)
       const actionPlayer = game.players.find(p => p.id === game.currentAction!.action.playerId);
@@ -1381,6 +1395,27 @@ export class GameService implements IGameService {
       await this.addGameLog(
         game.id, 
         `${player.name} challenged ${challenged?.name || 'unknown'}'s claim to have Ambassador.`
+      );
+    } else if (!isBlockChallenge && game.currentAction!.action.type === 'steal') {
+      // Specific text for Steal/Captain challenges (Scenario 2A/2B in Captain.txt)
+      const challenged = game.players.find(p => p.id === challengedId);
+      await this.addGameLog(
+        game.id, 
+        `${player.name} challenged ${challenged?.name || 'unknown'}'s claim to have Captain.`
+      );
+    } else if (isBlockChallenge && game.currentAction!.action.type === 'steal' && game.currentAction!.block?.character === 'Captain') {
+      // Specific text for Captain block challenges to Steal (Scenario 3A/3B in Captain.txt)
+      const challenged = game.players.find(p => p.id === challengedId);
+      await this.addGameLog(
+        game.id, 
+        `${player.name} challenged ${challenged?.name || 'unknown'}'s claim to have Captain for blocking the steal.`
+      );
+    } else if (isBlockChallenge && game.currentAction!.action.type === 'steal' && game.currentAction!.block?.character === 'Ambassador') {
+      // Specific text for Ambassador block challenges to Steal (Scenario 3C/3D in Captain.txt)
+      const challenged = game.players.find(p => p.id === challengedId);
+      await this.addGameLog(
+        game.id, 
+        `${player.name} challenged ${challenged?.name || 'unknown'}'s claim to have Ambassador for blocking the steal.`
       );
     } else if (!isBlockChallenge && game.currentAction!.action.type === 'assassinate') {
       // Specific text for Assassinate challenges
@@ -1679,16 +1714,113 @@ export class GameService implements IGameService {
           throw new Error('Target player not found');
         }
         
+        // First check if the action was blocked and the block was accepted
+        // Scenario 5: Block accepted without challenge
+        const blockAccepted = game.currentAction.block && 
+          game.currentAction.responses.some(r => 
+            r.playerId === player.id && r.type === 'pass'
+          );
+        
+        if (blockAccepted) {
+          // Action was blocked and block was accepted
+          const blockingCharacter = game.currentAction.block?.character;
+          const blocker = game.players.find(p => p.id === game.currentAction?.block?.blockerId);
+          
+          await this.addGameLog(
+            game.id,
+            `${player.name}'s steal was blocked by ${blocker?.name}'s ${blockingCharacter}. No coins were stolen.`
+          );
+          
+          this.advanceToNextPlayer(game);
+          break;
+        }
+        
+        // If we got here, the steal was successful (either no block or block was challenged successfully)
+        
+        // Special handling for block challenges (Scenario 3A, 3B, 3C, 3D)
+        // If there was a block challenge that was resolved, handle the result
+        if (game.currentAction.challenge?.isBlockChallenge && game.currentAction.block) {
+          const { challengerId, challengedId } = game.currentAction.challenge;
+          const blockingCharacter = game.currentAction.block.character;
+          
+          // If the blocker (challengedId) is eliminated, the block failed and steal proceeds
+          const blocker = game.players.find(p => p.id === challengedId);
+          if (blocker?.eliminated) {
+            // Block challenge succeeded, continue with steal (Scenario 3B or 3D)
+            await this.addGameLog(
+              game.id, 
+              `${blocker.name}'s block with ${blockingCharacter} failed. The steal continues.`
+            );
+          }
+          // Challenger was eliminated, block succeeded
+          else {
+            const challenger = game.players.find(p => p.id === challengerId);
+            if (challenger?.eliminated) {
+              // Block challenge failed, block succeeds (Scenario 3A or 3C)
+              await this.addGameLog(
+                game.id, 
+                `${challenger.name}'s challenge failed. The steal is blocked by ${blocker?.name}'s ${blockingCharacter}.`
+              );
+              this.advanceToNextPlayer(game);
+              break;
+            }
+          }
+        }
+        
+        // Handle third party challenge resolution (Scenario 4A)
+        // If a challenge failed but was from a third party, target may still get to block
+        if (game.currentAction.challenge && !game.currentAction.challenge.isBlockChallenge) {
+          const { challengerId } = game.currentAction.challenge;
+          
+          // If challenger isn't the target and challenger lost, the target may have blocked after
+          if (challengerId !== stealTarget.id) {
+            const challenger = game.players.find(p => p.id === challengerId);
+            
+            if (challenger?.eliminated || game.currentAction.challenge.isResolved) {
+              // Challenge failed, but the target may have blocked after
+              const blockResponse = game.currentAction.responses.find(r => 
+                r.playerId === stealTarget.id && r.type === 'block'
+              );
+              
+              if (blockResponse) {
+                // Target blocked after the third-party challenge failed
+                await this.addGameLog(
+                  game.id, 
+                  `${stealTarget.name} blocked the steal with ${blockResponse.character} after the challenge failed.`
+                );
+                this.advanceToNextPlayer(game);
+                break;
+              }
+            }
+          }
+        }
+        
+        // If we made it here, the steal is successful (Scenario 1, 2A, 3B, 3D, 4A)
+        
+        // Check if target has coins
+        if (stealTarget.coins === 0) {
+          await this.addGameLog(
+            game.id, 
+            `${player.name} attempted to steal from ${stealTarget.name}, but they had no coins to steal.`
+          );
+          this.advanceToNextPlayer(game);
+          break;
+        }
+        
         // Calculate coins to steal (up to 2)
         const stolenCoins = Math.min(stealTarget.coins, 2);
         
+        // Transfer coins
         stealTarget.coins -= stolenCoins;
         player.coins += stolenCoins;
         
+        // Log the action
         await this.addGameLog(
           game.id, 
-          `${player.name} successfully stole ${stolenCoins} coins from ${stealTarget.name}.`
+          `${player.name} successfully stole ${stolenCoins} coin${stolenCoins !== 1 ? 's' : ''} from ${stealTarget.name}.`
         );
+        
+        // End turn
         this.advanceToNextPlayer(game);
         break;
         
