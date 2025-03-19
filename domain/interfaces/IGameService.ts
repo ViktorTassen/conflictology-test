@@ -38,7 +38,7 @@ export interface IGameValidationService {
   getValidActions(game: Game, playerId: PlayerID): ActionType[];
   getValidResponses(game: Game, playerId: PlayerID): ResponseType[];
   isGameOver(game: Game): boolean;
-  getWinner(game: Game): Player | null;
+  getWinner(game: Game): import('../types/game').Player | null;
   getRequiredCharacter(actionType: ActionType): CardCharacter | undefined;
 }
 

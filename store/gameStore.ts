@@ -42,6 +42,10 @@ interface GameState {
   getValidActions: () => ActionType[];
   getValidResponses: () => ResponseType[];
   getValidBlockingCharacters: () => CardCharacter[];
+  getBlockingCharacters: (actionType: ActionType) => CardCharacter[];
+  blockAction: (character: CardCharacter) => Promise<void>;
+  challengeAction: () => Promise<void>;
+  completeExchange: (keptCardIndices: number[]) => Promise<void>;
   isPlayerTurn: () => boolean;
   isWaitingForPlayer: () => boolean;
   isCurrentAction: (actionType: ActionType) => boolean;
@@ -348,6 +352,64 @@ export const useGameStore = create<GameState>()(
       
       const actionType = currentGame.currentAction.action.type;
       return gameService.getBlockingCharacters(actionType);
+    },
+    
+    getBlockingCharacters: (actionType: ActionType) => {
+      return gameService.getBlockingCharacters(actionType);
+    },
+    
+    blockAction: async (character: CardCharacter) => {
+      const { gameId, playerId } = get();
+      
+      if (!gameId || !playerId) {
+        return;
+      }
+      
+      try {
+        set(state => { state.loading = true; });
+        await gameService.respondToAction(gameId, playerId, 'block', character);
+      } catch (err) {
+        console.error('Failed to block action:', err);
+        set(state => { state.error = err instanceof Error ? err.message : String(err); });
+      } finally {
+        set(state => { state.loading = false; });
+      }
+    },
+    
+    challengeAction: async () => {
+      const { gameId, playerId } = get();
+      
+      if (!gameId || !playerId) {
+        return;
+      }
+      
+      try {
+        set(state => { state.loading = true; });
+        await gameService.respondToAction(gameId, playerId, 'challenge');
+      } catch (err) {
+        console.error('Failed to challenge action:', err);
+        set(state => { state.error = err instanceof Error ? err.message : String(err); });
+      } finally {
+        set(state => { state.loading = false; });
+      }
+    },
+    
+    completeExchange: async (keptCardIndices: number[]) => {
+      const { gameId, playerId } = get();
+      
+      if (!gameId || !playerId) {
+        return;
+      }
+      
+      try {
+        set(state => { state.loading = true; });
+        await gameService.selectExchangeCards(gameId, playerId, keptCardIndices);
+      } catch (err) {
+        console.error('Failed to complete exchange:', err);
+        set(state => { state.error = err instanceof Error ? err.message : String(err); });
+      } finally {
+        set(state => { state.loading = false; });
+      }
     },
     
     isPlayerTurn: () => {

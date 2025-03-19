@@ -18,7 +18,7 @@ export const CreateGame: React.FC<CreateGameProps> = ({ onGameCreated }) => {
     }
 
     try {
-      const game = await createGame([playerName]);
+      const game = await createGame(playerName);
       console.log('Game created:', game);
       if (game && game.players && game.players.length > 0) {
         const playerId = game.players[0].id;

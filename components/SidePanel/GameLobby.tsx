@@ -13,7 +13,7 @@ export const GameLobby: React.FC<GameLobbyProps> = ({ game, playerId, onLeaveGam
 
   const handleLeaveGame = async () => {
     try {
-      await leaveGame(game.id, playerId);
+      await leaveGame();
       onLeaveGame();
     } catch (err) {
       console.error('Failed to leave game:', err);

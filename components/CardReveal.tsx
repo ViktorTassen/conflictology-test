@@ -80,7 +80,7 @@ const CardReveal: React.FC<CardRevealProps> = ({
     },
     cardsContainer: {
       display: 'flex',
-      flexWrap: 'wrap',
+      flexWrap: 'wrap' as const,
       gap: '15px',
       justifyContent: 'center',
       marginBottom: '20px'

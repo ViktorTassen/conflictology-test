@@ -22,10 +22,9 @@ export function GamePage() {
     loading, 
     error, 
     performAction,
-    blockAction,
-    challengeAction,
+    respondToAction,
     revealCard,
-    completeExchange,
+    selectExchangeCards,
     isHostPlayer,
     forceRestartGame
   } = useGameStore();
@@ -698,7 +697,7 @@ export function GamePage() {
                   className="challenge-block-button"
                   onClick={() => handleChallengeBlock()}
                 >
-                  Challenge Block (They don't have {currentGame.currentAction.block?.character})
+                  Challenge Block (They don't have {currentGame.currentAction?.block?.character})
                 </button>
                 
                 {/* Only the initiator gets the Accept Block button */}

@@ -3,8 +3,11 @@ import ReactDOM from 'react-dom/client';
 import { GamePage } from './GamePage';
 import './style.css';
 
-ReactDOM.createRoot(document.getElementById('game-container')).render(
-  <React.StrictMode>
-    <GamePage />
-  </React.StrictMode>
-);
+const container = document.getElementById('game-container');
+if (container) {
+  ReactDOM.createRoot(container).render(
+    <React.StrictMode>
+      <GamePage />
+    </React.StrictMode>
+  );
+}

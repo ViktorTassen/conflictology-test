@@ -27,7 +27,7 @@ import {
 import { GameRules } from './GameRules';
 
 export class GameService implements IGameService {
-  private rules: IGameValidationService;
+  public rules: IGameValidationService;
 
   constructor(private repository: IGameRepository) {
     this.rules = new GameRules();
@@ -1037,7 +1037,7 @@ export class GameService implements IGameService {
           // If it was a Foreign Aid block challenge specifically and the blocker lost
           if (game.currentAction.action.type === 'foreign_aid' && !game.currentAction.isResolved) {
             // Complete the Foreign Aid action after the player loses influence
-            const actionPlayer = game.players.find(p => p.id === game.currentAction.action.playerId);
+            const actionPlayer = game.players.find(p => p.id === game.currentAction?.action.playerId);
             if (actionPlayer) {
               actionPlayer.coins += 2;
               await this.addGameLog(
@@ -1095,10 +1095,10 @@ export class GameService implements IGameService {
           // Special handling for Assassinate (Scenario 4A, 4B, 4C, 4D)
           else if (game.currentAction.action.type === 'assassinate') {
             // Challenger lost influence, now the target can choose to block
-            const actionPlayer = game.players.find(p => p.id === game.currentAction.action.playerId);
-            const target = game.players.find(p => p.id === game.currentAction.action.target);
+            const actionPlayer = game.players.find(p => p.id === game.currentAction?.action.playerId);
+            const target = game.players.find(p => p.id === game.currentAction?.action.target);
             
-            if (playerId !== game.currentAction.action.target) {
+            if (game.currentAction?.action.target && playerId !== game.currentAction.action.target) {
               // If a third party was the challenger, continue with the assassination
               // Now target can choose to block with Contessa or allow (Scenario 4A)
               await this.addGameLog(
@@ -1246,26 +1246,7 @@ export class GameService implements IGameService {
   // #endregion
   
   // #region IGameValidationService Implementation
-  
-  canPerformAction(game: Game, action: ActionRequest): boolean {
-    return this.rules.canPerformAction(game, action);
-  }
-
-  canRespondWithBlock(game: Game, playerId: PlayerID, character: CardCharacter): boolean {
-    return this.rules.canRespondWithBlock(game, playerId, character);
-  }
-
-  canRespondWithChallenge(game: Game, playerId: PlayerID): boolean {
-    return this.rules.canRespondWithChallenge(game, playerId);
-  }
-
-  getValidActions(game: Game, playerId: PlayerID): ActionType[] {
-    return this.rules.getValidActions(game, playerId);
-  }
-
-  getValidResponses(game: Game, playerId: PlayerID): ResponseType[] {
-    return this.rules.getValidResponses(game, playerId);
-  }
+  // Implementations moved to bottom of file
   
   // #endregion
   
@@ -1538,14 +1519,16 @@ export class GameService implements IGameService {
         game.pendingActionFrom = challengedId;
         
         // Clear the pending challenge since we're handling it here
-        game.currentAction.challenge = {
-          ...game.currentAction.challenge,
-          isResolved: true
-        };
+        if (game.currentAction) {
+          game.currentAction.challenge = {
+            ...game.currentAction.challenge!,
+            isResolved: true
+          };
+        }
         
         // If it was a block challenge for Foreign Aid, the action should now succeed
-        if (isBlockChallenge && game.currentAction.action.type === 'foreign_aid') {
-          const actionPlayer = game.players.find(p => p.id === game.currentAction!.action.playerId);
+        if (isBlockChallenge && game.currentAction && game.currentAction.action.type === 'foreign_aid') {
+          const actionPlayer = game.players.find(p => p.id === game.currentAction?.action.playerId);
           if (actionPlayer) {
             // Delay giving coins until after losing influence
             game.currentAction.isResolved = false;
@@ -1682,17 +1665,17 @@ export class GameService implements IGameService {
       
       // Check if all active players have responded
       const allResponded = activePlayers.every(p => 
-        game.currentAction!.responses.some(r => r.playerId === p.id)
+        game.currentAction && game.currentAction.responses.some(r => r.playerId === p.id)
       );
       
       // For targeted actions, we need the target to respond first before resolving
-      if (game.currentAction.action.target) {
-        const targetPlayer = game.players.find(p => p.id === game.currentAction.action.target);
-        const targetResponded = game.currentAction.responses.some(r => r.playerId === game.currentAction.action.target);
+      if (game.currentAction && game.currentAction.action.target) {
+        const targetPlayer = game.players.find(p => p.id === game.currentAction?.action.target);
+        const targetResponded = game.currentAction.responses.some(r => r.playerId === game.currentAction?.action.target);
         
         // If the target has responded with a "pass", resolve the action
         const targetPassed = game.currentAction.responses.some(r => 
-          r.playerId === game.currentAction.action.target && r.type === 'pass'
+          r.playerId === game.currentAction?.action.target && r.type === 'pass'
         );
         
         if (targetResponded && targetPassed) {
@@ -2014,6 +1997,10 @@ export class GameService implements IGameService {
   
   getRequiredCharacter(actionType: ActionType): CardCharacter | undefined {
     return this.rules.getRequiredCharacter(actionType);
+  }
+  
+  getBlockingCharacters(actionType: ActionType): CardCharacter[] {
+    return ACTION_PROPERTIES[actionType].blockingCharacters;
   }
   
   // #endregion

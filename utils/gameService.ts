@@ -32,12 +32,12 @@ export const getCurrentState = async (gameId: string): Promise<Game> => {
 
 // Get valid action types for a player
 export const getValidActions = (game: Game, playerId: PlayerID): ActionType[] => {
-  return gameService.getValidActions(game, playerId);
+  return gameService.rules.getValidActions(game, playerId);
 };
 
 // Get valid response types for a player
 export const getValidResponses = (game: Game, playerId: PlayerID): ResponseType[] => {
-  return gameService.getValidResponses(game, playerId);
+  return gameService.rules.getValidResponses(game, playerId);
 };
 
 // Get characters that can block an action
