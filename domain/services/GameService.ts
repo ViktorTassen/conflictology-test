@@ -3,7 +3,8 @@ import {
   IGameLifecycleService,
   IGameStateService,
   IGameActionService,
-  IGameValidationService
+  IGameValidationService,
+  IGameEndService
 } from '../interfaces/IGameService';
 import { IGameRepository } from '../interfaces/IGameRepository';
 import { 
@@ -32,10 +33,173 @@ export class GameService implements IGameService {
     this.rules = new GameRules();
   }
   
-  // Method to vote for restart
-  async voteForRestart(gameId: string, playerId: PlayerID): Promise<void> {
+  // #region Helper Methods and Utility Functions
+  
+  private async getGameById(gameId: string): Promise<Game> {
     const game = await this.repository.getGame(gameId);
     if (!game) throw new Error('Game not found');
+    return game;
+  }
+  
+  private findPlayerById(game: Game, playerId?: PlayerID): Player | undefined {
+    if (!playerId) return undefined;
+    return game.players.find(p => p.id === playerId);
+  }
+  
+  private findPlayerOrThrow(game: Game, playerId: PlayerID): Player {
+    const player = this.findPlayerById(game, playerId);
+    if (!player) throw new Error('Player not found');
+    return player;
+  }
+  
+  private createLog(message: string): GameLog {
+    return {
+      message,
+      timestamp: Date.now()
+    };
+  }
+  
+  private replacePlayerCard(game: Game, player: Player, cardIndex: number): void {
+    if (game.deck.length === 0) {
+      // If deck is empty, just eliminate the card
+      player.cards[cardIndex].eliminated = true;
+      return;
+    }
+    
+    // Take a new card from the deck
+    const newCard = game.deck.pop()!;
+    
+    // Put the revealed card back in the deck
+    game.deck.push({...player.cards[cardIndex], eliminated: false});
+    
+    // Replace player's card
+    player.cards[cardIndex] = newCard;
+    
+    // Shuffle the deck
+    game.deck = this.shuffleDeck(game.deck);
+    
+    // Log the card replacement
+    game.logs.push(this.createLog(`${player.name} drew a new card from the deck.`));
+  }
+  
+  private async addGameLog(gameId: string, message: string): Promise<void> {
+    const game = await this.repository.getGame(gameId);
+    if (!game) return;
+    
+    game.logs.push(this.createLog(message));
+    game.updatedAt = new Date();
+    
+    await this.repository.updateGame(game);
+  }
+  
+  private shuffleDeck(deck: Card[]): Card[] {
+    const newDeck = [...deck]; // Create a copy of the deck
+    
+    // Fisher-Yates shuffle algorithm
+    for (let i = newDeck.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [newDeck[i], newDeck[j]] = [newDeck[j], newDeck[i]];
+    }
+    
+    return newDeck;
+  }
+  
+  private advanceToNextPlayer(game: Game): void {
+    // Store original player index before advancement
+    const originalPlayerIndex = game.currentPlayerIndex;
+    
+    // Clear current action state
+    game.currentAction = undefined;
+    game.pendingActionFrom = undefined;
+    game.gameState = 'play';
+    
+    // Move to next player - starting from the player AFTER the current player
+    // This ensures the current player doesn't go twice, even after eliminating someone
+    do {
+      game.currentPlayerIndex = (game.currentPlayerIndex + 1) % game.players.length;
+    } while (game.players[game.currentPlayerIndex].eliminated);
+    
+    // If we ended up with the same player (possible in a 2-player game where one player is eliminated),
+    // log a message for clarity
+    if (game.currentPlayerIndex === originalPlayerIndex) {
+      game.logs.push(this.createLog(`${game.players[game.currentPlayerIndex].name} has another turn (only active player).`));
+    }
+  }
+  
+  private checkPlayerElimination(game: Game, player: Player): void {
+    if (player.cards.every(card => card.eliminated)) {
+      // First, check if player is already marked as eliminated to avoid duplicate actions
+      if (player.eliminated) {
+        // Player is already eliminated - just make sure pendingActionFrom is cleared
+        if (game.pendingActionFrom === player.id) {
+          game.pendingActionFrom = undefined;
+        }
+        return;
+      }
+      
+      // Mark the player as eliminated
+      player.eliminated = true;
+      game.logs.push(this.createLog(`${player.name} has been eliminated from the game!`));
+      
+      // Check if only one player remains (game over)
+      const remainingPlayers = game.players.filter(p => !p.eliminated);
+      if (remainingPlayers.length === 1) {
+        const winner = remainingPlayers[0];
+        game.gameState = 'game_over';
+        game.logs.push(this.createLog(`${winner.name} is the last player standing and wins the game!`));
+        return;
+      }
+      
+      // Immediate cleanup - always clear pendingActionFrom if this player was pending
+      if (game.pendingActionFrom === player.id) {
+        // Clear pendingActionFrom immediately to avoid UI confusion
+        game.pendingActionFrom = undefined;
+        
+        // Player is eliminated but was supposed to do something
+        if (['lose_influence', 'reveal_challenge', 'action_response', 'block_response', 'exchange_selection'].includes(game.gameState)) {
+          // Log the automatic advancement
+          game.logs.push(this.createLog(`${player.name} is eliminated and cannot act. Game state automatically advanced.`));
+          
+          // Automatically advance to the next player if the player who needs to act is eliminated
+          this.advanceToNextPlayer(game);
+        }
+      } 
+      // If this player is the current player, advance to next
+      // But ONLY if the game is in 'play' state to avoid double advancement in other states
+      else if (game.players[game.currentPlayerIndex]?.id === player.id && game.gameState === 'play') {
+        // Log the automatic advancement
+        game.logs.push(this.createLog(`Current player ${player.name} is eliminated. Moving to next player.`));
+        this.advanceToNextPlayer(game);
+      }
+    }
+  }
+  
+  private playerHasRequiredCharacter(game: Game, playerId: PlayerID, character: CardCharacter): boolean {
+    const player = this.findPlayerById(game, playerId);
+    if (!player) return false;
+    
+    return player.cards.some(card => !card.eliminated && card.character === character);
+  }
+  
+  private getActionDisplayName(actionType: ActionType): string {
+    switch (actionType) {
+      case 'income': return 'take income';
+      case 'foreign_aid': return 'take foreign aid';
+      case 'tax': return 'collect tax';
+      case 'coup': return 'launch a coup against';
+      case 'steal': return 'steal from';
+      case 'assassinate': return 'assassinate';
+      case 'exchange': return 'exchange cards';
+      default: return actionType;
+    }
+  }
+  
+  // #endregion
+  
+  // #region IGameEndService Implementation
+  
+  async voteForRestart(gameId: string, playerId: PlayerID): Promise<void> {
+    const game = await this.getGameById(gameId);
     
     // Game must be in game_over state
     if (game.gameState !== 'game_over') {
@@ -56,11 +220,10 @@ export class GameService implements IGameService {
     game.restartVotes.push(playerId);
     
     // Log the vote
-    const player = game.players.find(p => p.id === playerId);
+    const player = this.findPlayerById(game, playerId);
     await this.addGameLog(gameId, `${player?.name || 'Unknown player'} voted to restart the game`);
     
     // Check if all players voted
-    const activePlayers = game.players.filter(p => !p.eliminated);
     if (game.restartVotes.length === game.players.length) {
       // All players voted, restart the game
       await this.restartGame(game);
@@ -70,35 +233,8 @@ export class GameService implements IGameService {
     }
   }
   
-  // Method to restart the game with the same players
-  private async restartGame(game: Game): Promise<void> {
-    // Reset the game state
-    game.gameState = 'setup';
-    game.currentPlayerIndex = 0;
-    game.currentAction = undefined;
-    game.pendingActionFrom = undefined;
-    game.restartVotes = [];
-    game.deck = [];
-    
-    // Reset all players
-    for (const player of game.players) {
-      player.eliminated = false;
-      player.coins = 0;
-      player.cards = [];
-    }
-    
-    // Add log
-    game.logs.push(this.createLog('Game restarted with the same players'));
-    
-    // Start the new game immediately
-    await this.repository.updateGame(game);
-    await this.startGame(game.id);
-  }
-  
-  // Method to cancel vote and return to lobby
   async cancelRestartVote(gameId: string, playerId: PlayerID): Promise<void> {
-    const game = await this.repository.getGame(gameId);
-    if (!game) throw new Error('Game not found');
+    const game = await this.getGameById(gameId);
     
     // Game must be in game_over state
     if (game.gameState !== 'game_over') {
@@ -106,21 +242,19 @@ export class GameService implements IGameService {
     }
     
     // Remove player's vote if they voted
-    if (game.restartVotes && game.restartVotes.includes(playerId)) {
+    if (game.restartVotes?.includes(playerId)) {
       game.restartVotes = game.restartVotes.filter(id => id !== playerId);
       
       // Log the action
-      const player = game.players.find(p => p.id === playerId);
+      const player = this.findPlayerById(game, playerId);
       await this.addGameLog(gameId, `${player?.name || 'Unknown player'} canceled their vote to restart`);
       
       await this.repository.updateGame(game);
     }
   }
   
-  // Method to force restart a game (host only)
   async forceRestartGame(gameId: string, playerId: PlayerID): Promise<void> {
-    const game = await this.repository.getGame(gameId);
-    if (!game) throw new Error('Game not found');
+    const game = await this.getGameById(gameId);
     
     // Check if player is the host (first player)
     if (game.players.length === 0 || game.players[0].id !== playerId) {
@@ -128,9 +262,25 @@ export class GameService implements IGameService {
     }
     
     // Log the action
-    const player = game.players.find(p => p.id === playerId);
+    const player = this.findPlayerById(game, playerId);
     await this.addGameLog(gameId, `${player?.name || 'Host'} forced a game restart`);
     
+    // Reset game state and start the new game
+    this.resetGameState(game, 'Game restarted by host');
+    await this.repository.updateGame(game);
+    await this.startGame(game.id);
+  }
+  
+  private async restartGame(game: Game): Promise<void> {
+    // Reset game state
+    this.resetGameState(game, 'Game restarted with the same players');
+    
+    // Update and start the new game
+    await this.repository.updateGame(game);
+    await this.startGame(game.id);
+  }
+  
+  private resetGameState(game: Game, logMessage: string): void {
     // Reset the game state
     game.gameState = 'setup';
     game.currentPlayerIndex = 0;
@@ -147,49 +297,23 @@ export class GameService implements IGameService {
     }
     
     // Add log
-    game.logs.push(this.createLog('Game restarted by host'));
-    
-    // Update game state
-    await this.repository.updateGame(game);
-    
-    // Start the new game immediately
-    await this.startGame(game.id);
+    game.logs.push(this.createLog(logMessage));
   }
+  
+  // #endregion
 
   // #region IGameLifecycleService Implementation
   
   async createGame(hostPlayer: string): Promise<Game> {
-    // Create a new game with the host player
     if (!hostPlayer) {
       throw new Error('Host player name is required');
     }
-
-    // Create initial game state with just the host
-    const newGame: Game = {
-      id: '', // Will be set by the repository
-      players: [
-        {
-          id: '', // Will be set by the repository
-          name: hostPlayer,
-          coins: 0, // Will be set when game starts
-          cards: [],
-          eliminated: false
-        }
-      ],
-      currentPlayerIndex: 0,
-      deck: [],
-      gameState: 'setup',
-      logs: [this.createLog(`Game created by ${hostPlayer}`)],
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
 
     return await this.repository.createGame([hostPlayer]);
   }
 
   async joinGame(gameId: string, playerName: string): Promise<string> {
-    const game = await this.repository.getGame(gameId);
-    if (!game) throw new Error('Game not found');
+    const game = await this.getGameById(gameId);
 
     if (game.gameState !== 'setup') {
       throw new Error('Cannot join a game that has already started');
@@ -209,9 +333,40 @@ export class GameService implements IGameService {
   }
 
   async startGame(gameId: string): Promise<void> {
-    const game = await this.repository.getGame(gameId);
-    if (!game) throw new Error('Game not found');
+    const game = await this.getGameById(gameId);
 
+    this.validatePlayerCount(game);
+    
+    // Initialize and shuffle deck
+    game.deck = this.createAndShuffleDeck();
+
+    // Deal cards to each player
+    this.dealCardsToPlayers(game);
+
+    // Update game state
+    game.gameState = 'play';
+    game.currentPlayerIndex = 0;
+    game.logs = [this.createLog('Game started')];
+    
+    await this.repository.updateGame(game);
+  }
+
+  async leaveGame(gameId: string, playerId: PlayerID): Promise<void> {
+    const game = await this.getGameById(gameId);
+    const player = this.findPlayerOrThrow(game, playerId);
+    
+    if (game.gameState === 'setup') {
+      // During setup, just remove the player
+      await this.repository.leaveGame(gameId, playerId);
+      await this.addGameLog(gameId, `${player.name} left the game`);
+    } else {
+      // During gameplay, mark the player as eliminated
+      this.handlePlayerLeaving(game, player);
+      await this.repository.updateGame(game);
+    }
+  }
+  
+  private validatePlayerCount(game: Game): void {
     if (game.players.length < GAME_CONSTANTS.MIN_PLAYERS) {
       throw new Error(`At least ${GAME_CONSTANTS.MIN_PLAYERS} players required to start`);
     }
@@ -219,8 +374,9 @@ export class GameService implements IGameService {
     if (game.players.length > GAME_CONSTANTS.MAX_PLAYERS) {
       throw new Error(`Maximum ${GAME_CONSTANTS.MAX_PLAYERS} players allowed`);
     }
-    
-    // Create a fresh deck
+  }
+  
+  private createAndShuffleDeck(): Card[] {
     const characters: CardCharacter[] = ['Duke', 'Assassin', 'Captain', 'Ambassador', 'Contessa'];
     let newDeck: Card[] = [];
     
@@ -231,11 +387,10 @@ export class GameService implements IGameService {
       }
     });
     
-    // Shuffle the deck
-    newDeck = this.shuffleDeck(newDeck);
-    game.deck = newDeck;
-
-    // Deal cards to each player
+    return this.shuffleDeck(newDeck);
+  }
+  
+  private dealCardsToPlayers(game: Game): void {
     for (const player of game.players) {
       // Check if we have enough cards
       if (game.deck.length < GAME_CONSTANTS.CARDS_PER_PLAYER) {
@@ -250,66 +405,53 @@ export class GameService implements IGameService {
       player.coins = GAME_CONSTANTS.STARTING_COINS;
       player.eliminated = false;
     }
-
-    // Update game state
-    game.gameState = 'play';
-    game.currentPlayerIndex = 0;
-    game.logs = [this.createLog('Game started')];
-    
-    await this.repository.updateGame(game);
   }
-
-  async leaveGame(gameId: string, playerId: PlayerID): Promise<void> {
-    const game = await this.repository.getGame(gameId);
-    if (!game) throw new Error('Game not found');
+  
+  private handlePlayerLeaving(game: Game, player: Player): void {
+    player.eliminated = true;
     
-    const player = game.players.find(p => p.id === playerId);
-    if (!player) throw new Error('Player not found');
+    // Return player's cards to the deck
+    const activeCards = player.cards.filter(card => !card.eliminated);
+    for (const card of activeCards) {
+      game.deck.push({...card, eliminated: false});
+    }
+    game.deck = this.shuffleDeck(game.deck);
     
-    if (game.gameState === 'setup') {
-      // During setup, just remove the player
-      await this.repository.leaveGame(gameId, playerId);
-      await this.addGameLog(gameId, `${player.name} left the game`);
+    // Mark all cards as eliminated
+    player.cards.forEach(card => card.eliminated = true);
+    
+    // Log the action
+    this.addGameLog(game.id, `${player.name} left the game and was eliminated`);
+    
+    // Check if game is over
+    if (this.rules.isGameOver(game)) {
+      this.handleGameOver(game);
     } else {
-      // During gameplay, mark the player as eliminated
-      player.eliminated = true;
-      
-      // Return player's cards to the deck
-      const activeCards = player.cards.filter(card => !card.eliminated);
-      for (const card of activeCards) {
-        game.deck.push({...card, eliminated: false});
-      }
-      game.deck = this.shuffleDeck(game.deck);
-      
-      // Mark all cards as eliminated
-      player.cards.forEach(card => card.eliminated = true);
-      
-      // Log the action
-      await this.addGameLog(gameId, `${player.name} left the game and was eliminated`);
-      
-      // Check if game is over
-      if (this.rules.isGameOver(game)) {
-        const winner = this.rules.getWinner(game);
-        if (winner) {
-          game.gameState = 'game_over';
-          await this.addGameLog(gameId, `${winner.name} has won the game!`);
-        }
-      } else {
-        // If it was this player's turn, move to next player
-        if (game.currentPlayerIndex < game.players.length && 
-            game.players[game.currentPlayerIndex].id === playerId) {
-          this.advanceToNextPlayer(game);
-        }
-        
-        // If this player was waiting for an action in any game state,
-        // also automatically advance the game state
-        if (game.pendingActionFrom === playerId) {
-          await this.addGameLog(gameId, `${player.name} left during their action. Game state automatically advanced.`);
-          this.advanceToNextPlayer(game);
-        }
-      }
-      
-      await this.repository.updateGame(game);
+      this.handlePlayerLeavingDuringGame(game, player);
+    }
+  }
+  
+  private handlePlayerLeavingDuringGame(game: Game, player: Player): void {
+    // If it was this player's turn, move to next player
+    if (game.currentPlayerIndex < game.players.length && 
+        game.players[game.currentPlayerIndex].id === player.id) {
+      this.advanceToNextPlayer(game);
+    }
+    
+    // If this player was waiting for an action in any game state,
+    // also automatically advance the game state
+    if (game.pendingActionFrom === player.id) {
+      this.addGameLog(game.id, `${player.name} left during their action. Game state automatically advanced.`);
+      this.advanceToNextPlayer(game);
+    }
+  }
+  
+  private handleGameOver(game: Game): void {
+    const winner = this.rules.getWinner(game);
+    if (winner) {
+      game.gameState = 'game_over';
+      // Use synchronous log creation to avoid async issues
+      game.logs.push(this.createLog(`${winner.name} has won the game!`));
     }
   }
   
@@ -318,15 +460,10 @@ export class GameService implements IGameService {
   // #region IGameStateService Implementation
   
   async getCurrentState(gameId: string): Promise<Game> {
-    const game = await this.repository.getGame(gameId);
-    if (!game) throw new Error('Game not found');
+    const game = await this.getGameById(gameId);
     
     // Auto-fix: Check if game is in a stuck state with an eliminated player
-    // This provides a clean server-side fix for the UI issue
-    if (game.gameState === 'lose_influence' && 
-        game.pendingActionFrom && 
-        game.players.find(p => p.id === game.pendingActionFrom)?.eliminated) {
-      
+    if (this.isGameInStuckState(game)) {
       console.log(`Auto-fixing game state: ${game.id} - Eliminated player in pendingActionFrom`);
       
       // Log the action
@@ -337,9 +474,6 @@ export class GameService implements IGameService {
       
       // Save the fixed state
       await this.repository.updateGame(game);
-      
-      // Return the fixed game state
-      return game;
     }
     
     return game;
@@ -349,22 +483,27 @@ export class GameService implements IGameService {
     return this.repository.subscribeToGame(gameId, callback);
   }
   
+  private isGameInStuckState(game: Game): boolean {
+    return (
+      game.gameState === 'lose_influence' && 
+      game.pendingActionFrom !== undefined && 
+      this.findPlayerById(game, game.pendingActionFrom)?.eliminated === true
+    );
+  }
+  
   // #endregion
   
   // #region IGameActionService Implementation
   
   async performAction(gameId: string, actionRequest: ActionRequest): Promise<void> {
-    const game = await this.repository.getGame(gameId);
-    if (!game) throw new Error('Game not found');
+    const game = await this.getGameById(gameId);
 
     // Validate the action
     if (!this.rules.canPerformAction(game, actionRequest)) {
       throw new Error('Invalid action');
     }
 
-    const player = game.players.find(p => p.id === actionRequest.playerId);
-    if (!player) throw new Error('Player not found');
-    
+    const player = this.findPlayerOrThrow(game, actionRequest.playerId);
     const actionProps = ACTION_PROPERTIES[actionRequest.type];
     
     // Create new game action
@@ -375,69 +514,83 @@ export class GameService implements IGameService {
     };
     
     // Handle action based on type
-    switch (actionRequest.type) {
-      case 'income':
-        // Income is not blockable or challengeable, resolve immediately
-        player.coins += 1;
-        await this.addGameLog(gameId, `${player.name} took income (+1 coin)`);
-        this.advanceToNextPlayer(game);
-        break;
-        
-      case 'coup':
-        // Coup requires a target
-        if (!actionRequest.target) {
-          throw new Error('Target is required for coup');
-        }
-        
-        const targetPlayer = game.players.find(p => p.id === actionRequest.target);
-        if (!targetPlayer) {
-          throw new Error('Target player not found');
-        }
-        
-        // Pay the cost
-        player.coins -= actionProps.cost;
-        
-        // Set game state for target to lose influence
-        game.gameState = 'lose_influence';
-        game.currentAction = newAction;
-        game.pendingActionFrom = targetPlayer.id;
-        
-        await this.addGameLog(gameId, `${player.name} launched a coup against ${targetPlayer.name}`);
-        break;
-        
-      default:
-        // For all other actions, set up the action_response state
-        game.gameState = 'action_response';
-        game.currentAction = newAction;
-        
-        // Pay costs for actions that require coins
-        if (actionRequest.type === 'assassinate') {
-          // Deduct 3 coins for Assassinate
-          player.coins -= actionProps.cost;
-          
-          const targetPlayer = game.players.find(p => p.id === actionRequest.target);
-          await this.addGameLog(
-            gameId, 
-            `${player.name} paid ${actionProps.cost} coins and attempted to assassinate ${targetPlayer?.name || 'unknown'}`
-          );
-        } 
-        // Log other actions
-        else if (actionRequest.target) {
-          const targetPlayer = game.players.find(p => p.id === actionRequest.target);
-          await this.addGameLog(
-            gameId, 
-            `${player.name} attempted to ${this.getActionDisplayName(actionRequest.type)} ${targetPlayer?.name || 'unknown'}`
-          );
-        } else {
-          await this.addGameLog(
-            gameId, 
-            `${player.name} attempted to ${this.getActionDisplayName(actionRequest.type)}`
-          );
-        }
-        break;
+    if (actionRequest.type === 'income') {
+      await this.handleIncomeAction(game, player);
+    } else if (actionRequest.type === 'coup') {
+      await this.handleCoupAction(game, player, actionRequest, newAction, actionProps.cost);
+    } else {
+      await this.handleOtherAction(game, player, actionRequest, newAction, actionProps.cost);
     }
     
     await this.repository.updateGame(game);
+  }
+  
+  private async handleIncomeAction(game: Game, player: Player): Promise<void> {
+    // Income is not blockable or challengeable, resolve immediately
+    player.coins += 1;
+    await this.addGameLog(game.id, `${player.name} took income (+1 coin)`);
+    this.advanceToNextPlayer(game);
+  }
+  
+  private async handleCoupAction(
+    game: Game, 
+    player: Player, 
+    actionRequest: ActionRequest, 
+    newAction: GameAction, 
+    cost: number
+  ): Promise<void> {
+    if (!actionRequest.target) {
+      throw new Error('Target is required for coup');
+    }
+    
+    const targetPlayer = this.findPlayerOrThrow(game, actionRequest.target);
+    
+    // Pay the cost
+    player.coins -= cost;
+    
+    // Set game state for target to lose influence
+    game.gameState = 'lose_influence';
+    game.currentAction = newAction;
+    game.pendingActionFrom = targetPlayer.id;
+    
+    await this.addGameLog(game.id, `${player.name} launched a coup against ${targetPlayer.name}`);
+  }
+  
+  private async handleOtherAction(
+    game: Game, 
+    player: Player, 
+    actionRequest: ActionRequest, 
+    newAction: GameAction, 
+    cost: number
+  ): Promise<void> {
+    // For all other actions, set up the action_response state
+    game.gameState = 'action_response';
+    game.currentAction = newAction;
+    
+    // Pay costs for actions that require coins
+    if (actionRequest.type === 'assassinate') {
+      // Deduct coins for Assassinate
+      player.coins -= cost;
+      
+      const targetPlayer = this.findPlayerById(game, actionRequest.target!);
+      await this.addGameLog(
+        game.id, 
+        `${player.name} paid ${cost} coins and attempted to assassinate ${targetPlayer?.name || 'unknown'}`
+      );
+    } 
+    // Log other actions
+    else if (actionRequest.target) {
+      const targetPlayer = this.findPlayerById(game, actionRequest.target);
+      await this.addGameLog(
+        game.id, 
+        `${player.name} attempted to ${this.getActionDisplayName(actionRequest.type)} ${targetPlayer?.name || 'unknown'}`
+      );
+    } else {
+      await this.addGameLog(
+        game.id, 
+        `${player.name} attempted to ${this.getActionDisplayName(actionRequest.type)}`
+      );
+    }
   }
 
   async respondToAction(
@@ -446,45 +599,37 @@ export class GameService implements IGameService {
     responseType: ResponseType, 
     character?: CardCharacter
   ): Promise<void> {
-    const game = await this.repository.getGame(gameId);
-    if (!game) throw new Error('Game not found');
+    const game = await this.getGameById(gameId);
     
     if (!game.currentAction) {
       throw new Error('No action to respond to');
     }
     
-    const player = game.players.find(p => p.id === playerId);
-    if (!player) throw new Error('Player not found');
+    const player = this.findPlayerOrThrow(game, playerId);
     
     // Handle different response types
     switch (responseType) {
       case 'pass':
-        // Add pass response
         await this.handlePassResponse(game, player);
         break;
         
       case 'block':
-        // Need character to block
         if (!character) {
           throw new Error('Character required for block');
         }
         
-        // Validate the block
         if (!this.rules.canRespondWithBlock(game, playerId, character)) {
           throw new Error('Cannot block with this character');
         }
         
-        // Add block response
         await this.handleBlockResponse(game, player, character);
         break;
         
       case 'challenge':
-        // Validate the challenge
         if (!this.rules.canRespondWithChallenge(game, playerId)) {
           throw new Error('Cannot challenge this action');
         }
         
-        // Add challenge response
         await this.handleChallengeResponse(game, player);
         break;
     }
@@ -493,12 +638,11 @@ export class GameService implements IGameService {
   }
 
   async revealCard(gameId: string, playerId: PlayerID, cardIndex: number): Promise<void> {
-    const game = await this.repository.getGame(gameId);
-    if (!game) throw new Error('Game not found');
+    const game = await this.getGameById(gameId);
     
     // Must be in reveal_challenge state
     if (game.gameState !== 'reveal_challenge' || !game.currentAction) {
-      throw new Error('Not in a state where card revelation is needed');
+      throw new Error('Invalid game state for revealing a card');
     }
     
     // Must be the player's turn to reveal
@@ -506,9 +650,9 @@ export class GameService implements IGameService {
       throw new Error('Not your turn to reveal a card');
     }
     
-    const player = game.players.find(p => p.id === playerId);
-    if (!player) throw new Error('Player not found');
+    const player = this.findPlayerOrThrow(game, playerId);
     
+    // Validate the card index
     if (cardIndex < 0 || cardIndex >= player.cards.length || player.cards[cardIndex].eliminated) {
       throw new Error('Invalid card index');
     }
@@ -781,18 +925,10 @@ export class GameService implements IGameService {
     await this.repository.updateGame(game);
   }
   
-  // Helper method to check if a player has the claimed character
-  // This can be used before the player needs to reveal a card
-  private playerHasRequiredCharacter(game: Game, playerId: PlayerID, requiredCharacter: CardCharacter): boolean {
-    const player = game.players.find(p => p.id === playerId);
-    if (!player) return false;
-    
-    return player.cards.some(card => !card.eliminated && card.character === requiredCharacter);
-  }
+  // This method has been moved to line 150
 
   async loseInfluence(gameId: string, playerId: PlayerID, cardIndex: number): Promise<void> {
-    const game = await this.repository.getGame(gameId);
-    if (!game) throw new Error('Game not found');
+    const game = await this.getGameById(gameId);
     
     // Must be in lose_influence state
     if (game.gameState !== 'lose_influence' || !game.pendingActionFrom) {
@@ -804,8 +940,7 @@ export class GameService implements IGameService {
       throw new Error('Not your turn to lose influence');
     }
     
-    const player = game.players.find(p => p.id === playerId);
-    if (!player) throw new Error('Player not found');
+    const player = this.findPlayerOrThrow(game, playerId);
     
     // Special Assassinate Scenario 2A handling
     // If this player challenged an Assassin, lost the challenge, and was the target
@@ -829,11 +964,7 @@ export class GameService implements IGameService {
       
       // Check if the game is over
       if (this.rules.isGameOver(game)) {
-        const winner = this.rules.getWinner(game);
-        if (winner) {
-          game.gameState = 'game_over';
-          await this.addGameLog(gameId, `${winner.name} has won the game!`);
-        }
+        this.handleGameOver(game);
         await this.repository.updateGame(game);
         return;
       }
@@ -872,11 +1003,7 @@ export class GameService implements IGameService {
       
       // Check if the game is over
       if (this.rules.isGameOver(game)) {
-        const winner = this.rules.getWinner(game);
-        if (winner) {
-          game.gameState = 'game_over';
-          await this.addGameLog(gameId, `${winner.name} has won the game!`);
-        }
+        this.handleGameOver(game);
         await this.repository.updateGame(game);
         return;
       }
@@ -892,11 +1019,7 @@ export class GameService implements IGameService {
     // If we're still here, the player lost a card but wasn't eliminated
     // Check if the game is over (just in case)
     if (this.rules.isGameOver(game)) {
-      const winner = this.rules.getWinner(game);
-      if (winner) {
-        game.gameState = 'game_over';
-        await this.addGameLog(gameId, `${winner.name} has won the game!`);
-      }
+      this.handleGameOver(game);
       await this.repository.updateGame(game);
       return;
     }
@@ -1146,119 +1269,10 @@ export class GameService implements IGameService {
   
   // #endregion
   
-  // #region Private Helper Methods
+  // This region has been consolidated with the Helper Methods region at the top of the file
+  // These utility methods have been consolidated with the implementations at the top of the file
   
-  private createLog(message: string): GameLog {
-    return {
-      message,
-      timestamp: Date.now()
-    };
-  }
-  
-  private async addGameLog(gameId: string, message: string): Promise<void> {
-    const game = await this.repository.getGame(gameId);
-    if (!game) return;
-    
-    game.logs.push(this.createLog(message));
-    game.updatedAt = new Date();
-    
-    await this.repository.updateGame(game);
-  }
-  
-  private shuffleDeck(deck: Card[]): Card[] {
-    return [...deck].sort(() => Math.random() - 0.5);
-  }
-  
-  private advanceToNextPlayer(game: Game): void {
-    // Store original player index before advancement
-    const originalPlayerIndex = game.currentPlayerIndex;
-    
-    // Clear current action state
-    game.currentAction = undefined;
-    game.pendingActionFrom = undefined;
-    game.gameState = 'play';
-    
-    // Move to next player - starting from the player AFTER the current player
-    // This ensures the current player doesn't go twice, even after eliminating someone
-    do {
-      game.currentPlayerIndex = (game.currentPlayerIndex + 1) % game.players.length;
-    } while (game.players[game.currentPlayerIndex].eliminated);
-    
-    // If we ended up with the same player (possible in a 2-player game where one player is eliminated),
-    // log a message for clarity
-    if (game.currentPlayerIndex === originalPlayerIndex) {
-      game.logs.push(this.createLog(`${game.players[game.currentPlayerIndex].name} has another turn (only active player).`));
-    }
-  }
-  
-  private checkPlayerElimination(game: Game, player: Player): void {
-    if (player.cards.every(card => card.eliminated)) {
-      // First, check if player is already marked as eliminated to avoid duplicate actions
-      if (player.eliminated) {
-        // Player is already eliminated - just make sure pendingActionFrom is cleared
-        if (game.pendingActionFrom === player.id) {
-          game.pendingActionFrom = undefined;
-        }
-        return;
-      }
-      
-      // Mark the player as eliminated
-      player.eliminated = true;
-      game.logs.push(this.createLog(`${player.name} has been eliminated from the game!`));
-      
-      // Check if only one player remains (game over)
-      const remainingPlayers = game.players.filter(p => !p.eliminated);
-      if (remainingPlayers.length === 1) {
-        const winner = remainingPlayers[0];
-        game.gameState = 'game_over';
-        game.logs.push(this.createLog(`${winner.name} is the last player standing and wins the game!`));
-        return;
-      }
-      
-      // Immediate cleanup - always clear pendingActionFrom if this player was pending
-      if (game.pendingActionFrom === player.id) {
-        // Clear pendingActionFrom immediately to avoid UI confusion
-        game.pendingActionFrom = undefined;
-        
-        // Player is eliminated but was supposed to do something
-        if (['lose_influence', 'reveal_challenge', 'action_response', 'block_response', 'exchange_selection'].includes(game.gameState)) {
-          // Log the automatic advancement
-          game.logs.push(this.createLog(`${player.name} is eliminated and cannot act. Game state automatically advanced.`));
-          
-          // Automatically advance to the next player if the player who needs to act is eliminated
-          this.advanceToNextPlayer(game);
-        }
-      } 
-      // If this player is the current player, advance to next
-      // But ONLY if the game is in 'play' state to avoid double advancement in other states
-      else if (game.players[game.currentPlayerIndex]?.id === player.id && game.gameState === 'play') {
-        // Log the automatic advancement
-        game.logs.push(this.createLog(`Current player ${player.name} is eliminated. Moving to next player.`));
-        this.advanceToNextPlayer(game);
-      }
-    }
-  }
-  
-  private replacePlayerCard(game: Game, player: Player, cardIndex: number): void {
-    if (game.deck.length === 0) {
-      return; // No cards left to replace with
-    }
-    
-    // Get a new card from the deck
-    const newCard = game.deck.pop()!;
-    
-    // Return the old card to the deck
-    const oldCard = player.cards[cardIndex];
-    game.deck.push({...oldCard, eliminated: false});
-    
-    // Replace the player's card
-    player.cards[cardIndex] = newCard;
-    
-    // Shuffle the deck
-    game.deck = this.shuffleDeck(game.deck);
-    
-    game.logs.push(this.createLog(`${player.name} drew a new card from the deck.`));
-  }
+  // This method has been moved and consolidated with the implementation at line 62
   
   private async handlePassResponse(game: Game, player: Player): Promise<void> {
     // Add the pass response
@@ -1964,17 +1978,42 @@ export class GameService implements IGameService {
     await this.repository.updateGame(game);
   }
   
-  private getActionDisplayName(actionType: ActionType): string {
-    switch (actionType) {
-      case 'income': return 'take income';
-      case 'foreign_aid': return 'take foreign aid';
-      case 'tax': return 'collect tax';
-      case 'coup': return 'launch a coup against';
-      case 'steal': return 'steal from';
-      case 'assassinate': return 'assassinate';
-      case 'exchange': return 'exchange cards';
-      default: return actionType;
-    }
+  // Duplicate getActionDisplayName removed - using implementation at line 184
+  
+  // #endregion
+  
+  // #region IGameValidationService Implementation - delegated to GameRules
+  
+  canPerformAction(game: Game, action: ActionRequest): boolean {
+    return this.rules.canPerformAction(game, action);
+  }
+  
+  canRespondWithBlock(game: Game, playerId: PlayerID, character: CardCharacter): boolean {
+    return this.rules.canRespondWithBlock(game, playerId, character);
+  }
+  
+  canRespondWithChallenge(game: Game, playerId: PlayerID): boolean {
+    return this.rules.canRespondWithChallenge(game, playerId);
+  }
+  
+  getValidActions(game: Game, playerId: PlayerID): ActionType[] {
+    return this.rules.getValidActions(game, playerId);
+  }
+  
+  getValidResponses(game: Game, playerId: PlayerID): ResponseType[] {
+    return this.rules.getValidResponses(game, playerId);
+  }
+  
+  isGameOver(game: Game): boolean {
+    return this.rules.isGameOver(game);
+  }
+  
+  getWinner(game: Game): Player | null {
+    return this.rules.getWinner(game);
+  }
+  
+  getRequiredCharacter(actionType: ActionType): CardCharacter | undefined {
+    return this.rules.getRequiredCharacter(actionType);
   }
   
   // #endregion

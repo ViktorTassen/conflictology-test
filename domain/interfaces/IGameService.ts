@@ -37,6 +37,9 @@ export interface IGameValidationService {
   canRespondWithChallenge(game: Game, playerId: PlayerID): boolean;
   getValidActions(game: Game, playerId: PlayerID): ActionType[];
   getValidResponses(game: Game, playerId: PlayerID): ResponseType[];
+  isGameOver(game: Game): boolean;
+  getWinner(game: Game): Player | null;
+  getRequiredCharacter(actionType: ActionType): CardCharacter | undefined;
 }
 
 // Game end and restart management
